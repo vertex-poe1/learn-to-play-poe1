@@ -27,3 +27,6 @@ target
 
 # Ignore configuration file
 l2p-poe1.toml
+
+_reference/
+_live/

@@ -9,3 +9,7 @@ build-linux:
 # Run the project locally in dev mode
 run:
     cargo run
+
+# Safely update dependencies ensuring they are at least 7 days old
+update:
+    cargo cooldown update

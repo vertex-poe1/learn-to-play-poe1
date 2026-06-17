@@ -1,28 +1,9 @@
 mod config;
 mod tracker;
 
-use eframe::egui;
+use egui_overlay::{EguiOverlay, start};
 use tracker::{create_tracker, WindowTracker};
 use config::{load_config, AppConfig};
-
-fn main() -> Result<(), eframe::Error> {
-    let config = load_config();
-    
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_decorations(false)
-            .with_transparent(true)
-            .with_always_on_top()
-            .with_mouse_passthrough(true),
-        ..Default::default()
-    };
-
-    eframe::run_native(
-        "POE Overlay",
-        options,
-        Box::new(move |_cc| Box::new(OverlayApp::new(config))),
-    )
-}
 
 struct OverlayApp {
     tracker: Box<dyn WindowTracker>,
@@ -38,36 +19,46 @@ impl OverlayApp {
     }
 }
 
-impl eframe::App for OverlayApp {
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [0.0, 0.0, 0.0, 0.0]
-    }
-
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // We currently track by window title, but the config contains the executable name.
-        // We can keep tracking by "Path of Exile" for now, or use the configured executable name
-        // if the tracker is updated to support it in the future.
+impl EguiOverlay for OverlayApp {
+    fn gui_run(
+        &mut self,
+        egui_context: &egui::Context,
+        _default_gfx_backend: &mut egui_overlay::egui_render_three_d::ThreeDBackend,
+        glfw_backend: &mut egui_overlay::egui_window_glfw_passthrough::GlfwBackend,
+    ) {
+        let mut found_game = false;
         if let Some(rect) = self.tracker.get_window_rect("Path of Exile") {
-            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
-                rect.x, rect.y,
-            )));
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                rect.width, rect.height,
-            )));
+            found_game = true;
+            glfw_backend.window.set_pos(rect.x as i32, rect.y as i32);
+            glfw_backend.window.set_size(rect.width as i32, rect.height as i32);
+        } else {
+            glfw_backend.window.set_pos(0, 0);
+            glfw_backend.window.set_size(1920, 1080);
         }
+
+        // Enable passthrough on the underlying GLFW window natively
+        glfw_backend.window.set_mouse_passthrough(true);
+        // We can request a repaint if needed, but egui_overlay does this continuously if transparent
+        egui_context.request_repaint();
 
         egui::CentralPanel::default()
             .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
-            .show(ctx, |ui| {
+            .show(egui_context, |ui| {
+                let screen_rect = egui_context.screen_rect();
+                let text = if found_game { "TEST" } else { "WAITING FOR POE..." };
                 ui.painter().text(
-                    egui::pos2(20.0, 20.0),
-                    egui::Align2::LEFT_TOP,
-                    "POE Overlay Active",
-                    egui::FontId::proportional(24.0),
+                    egui::pos2(screen_rect.max.x - 40.0, screen_rect.min.y + 40.0),
+                    egui::Align2::RIGHT_TOP,
+                    text,
+                    egui::FontId::proportional(40.0),
                     egui::Color32::RED,
                 );
             });
-
-        ctx.request_repaint();
     }
+}
+
+fn main() {
+    let config = load_config();
+    let app = OverlayApp::new(config);
+    start(app);
 }
