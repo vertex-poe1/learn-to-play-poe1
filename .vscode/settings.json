@@ -1,0 +1,15 @@
+// .vscode/settings.json (JSON — VS Code Config)
+
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },  
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,  
+  "files.watcherExclude": {
+    "_reference/**": true,
+    "_live/**": true
+  }
+}
