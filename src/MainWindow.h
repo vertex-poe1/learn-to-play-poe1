@@ -3,11 +3,13 @@
 #include "AppConfig.h"
 
 #include <QMainWindow>
+#include <QRect>
 #include <QSystemTrayIcon>
 
 class QPlainTextEdit;
 class QMenu;
 class QTimer;
+class GameOverlay;
 class SettingsDialog;
 class WindowTracker;
 
@@ -45,6 +47,8 @@ private:
 
     WindowTracker   *m_tracker{};
     QTimer          *m_pollTimer{};
+    GameOverlay     *m_overlay{};
     bool             m_gameFound{false};
+    QRect            m_lastGameRect;
     QString          m_detectedInstallDir;
 };

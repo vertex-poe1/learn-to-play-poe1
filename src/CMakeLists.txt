@@ -4,6 +4,8 @@ qt_add_executable(l2p-poe1
     main.cpp
     AppConfig.cpp
     AppConfig.h
+    GameOverlay.cpp
+    GameOverlay.h
     MainWindow.cpp
     MainWindow.h
     SettingsDialog.cpp

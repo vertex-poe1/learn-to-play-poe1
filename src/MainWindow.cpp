@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "GameOverlay.h"
 #include "SettingsDialog.h"
 #include "WindowTracker.h"
 
@@ -28,6 +29,8 @@ MainWindow::MainWindow(QWidget *parent)
     log(QStringLiteral("Application started. Config: %1").arg(AppConfig::configPath()));
 
     m_tracker = WindowTracker::create();
+
+    m_overlay = new GameOverlay(this);
 
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(1000);
@@ -101,6 +104,16 @@ void MainWindow::onPollTimer()
         else
             log(QStringLiteral("Game window lost (%1).").arg(exeName));
     }
+
+    if (state.found) {
+        m_lastGameRect = state.rect;
+    } else if (m_lastGameRect.isNull()) {
+        // Default fallback rect used before the game has ever been seen.
+        m_lastGameRect = QRect(0, 0, 1280, 720);
+    }
+
+    m_overlay->updateGameRect(m_lastGameRect);
+    m_overlay->setGameVisible(state.found && m_config.useGameOverlay);
 
     if (state.found && m_config.autoDetectInstallDir
         && !state.installDir.isEmpty()

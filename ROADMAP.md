@@ -69,21 +69,21 @@
 
 ---
 
-## Phase 4 — Game Overlay
+## Phase 4 — Game Overlay *(complete)*
 
 > Qt removes the IPC/child-process complexity from the Rust prototype — both windows live in the same process.
 
-- [ ] Overlay as a second `QWidget` in the same process (no child process)
-- [ ] Window flags: `FramelessWindowHint | WindowStaysOnTopHint | Tool`
-- [ ] Transparent background: `WA_TranslucentBackground`
-- [ ] Track game window rect; reposition/resize overlay each poll cycle
-- [ ] Fall back to large default rect when game is not found
-- [ ] Per-region hit-testing via `QWidget::setMask(QRegion)`:
+- [x] Overlay as a second `QWidget` in the same process (no child process)
+- [x] Window flags: `FramelessWindowHint | WindowStaysOnTopHint | Tool`
+- [x] Transparent background: `WA_TranslucentBackground`
+- [x] Track game window rect; reposition/resize overlay each poll cycle
+- [x] Fall back to large default rect when game is not found
+- [x] Per-region hit-testing via `QWidget::setMask(QRegion)`:
   - Background / empty areas → click-through to game
   - UI widget areas → interactive, capture mouse
   - Update mask on overlay layout change
-- [ ] Show/hide overlay with game window (show when found + overlay enabled)
-- [ ] Config changes propagate directly (shared object, no IPC)
+- [x] Show/hide overlay with game window (show when found + overlay enabled)
+- [x] Config changes propagate directly (shared object, no IPC)
 
 ---
 

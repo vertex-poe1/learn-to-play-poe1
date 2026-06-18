@@ -4,7 +4,8 @@
       "Bash(cmake:*)",
       "Bash(just configure *)",
       "PowerShell(echo:*)",
-      "Bash(just build *)"
+      "Bash(just build *)",
+      "Bash(git -C * log *)"
     ]
   }
 }
