@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct AppConfig {
     pub windows_executable_name: String,
     pub linux_executable_name: String,
+    pub use_game_overlay: bool,
 }
 
 impl Default for AppConfig {
@@ -14,6 +15,7 @@ impl Default for AppConfig {
         Self {
             windows_executable_name: "PathOfExile.exe".to_string(),
             linux_executable_name: "PathOfExile".to_string(),
+            use_game_overlay: true,
         }
     }
 }
@@ -53,4 +55,11 @@ fn get_config_path() -> PathBuf {
     path.push("l2p-poe1.toml");
     
     path
+}
+
+pub fn save_config(config: &AppConfig) {
+    let config_path = get_config_path();
+    if let Ok(toml_str) = toml::to_string_pretty(config) {
+        let _ = fs::write(&config_path, toml_str);
+    }
 }

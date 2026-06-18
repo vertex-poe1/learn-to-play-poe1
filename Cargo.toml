@@ -2,12 +2,17 @@
 name = "learn-to-play-poe1"
 version = "0.1.0"
 edition = "2024"
+default-run = "learn-to-play-poe1"
 
 [dependencies]
+eframe = "0.29.0"
 egui = "0.29"
 egui_overlay = "0.9.0"
+image = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.138"
 toml = "1.1.2"
+tray-icon = "0.24.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.52", features = [
