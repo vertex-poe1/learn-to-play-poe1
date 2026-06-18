@@ -10,8 +10,8 @@ class GameOverlay : public QWidget
 public:
     explicit GameOverlay(QWidget *parent = nullptr);
 
-    // Reposition and resize the overlay to cover the given screen rect.
-    void updateGameRect(const QRect &gameRect);
+    // Reposition and resize the overlay to cover the given game window rect (physical px on Windows).
+    void updateGameRect(const QRect &physicalRect);
 
     // Show overlay when the game window is present, hide otherwise.
     void setGameVisible(bool found);

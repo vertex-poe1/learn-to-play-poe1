@@ -5,3 +5,4 @@ function(add_qt_test name)
 endfunction()
 
 add_qt_test(test_placeholder test_placeholder.cpp)
+add_qt_test(test_dpi test_dpi.cpp)

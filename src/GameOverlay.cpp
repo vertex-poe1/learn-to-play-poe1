@@ -1,8 +1,10 @@
 #include "GameOverlay.h"
 
+#include <QGuiApplication>
 #include <QLabel>
 #include <QPainter>
 #include <QResizeEvent>
+#include <QScreen>
 
 GameOverlay::GameOverlay(QWidget *parent)
     : QWidget(parent, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool)
@@ -18,10 +20,21 @@ GameOverlay::GameOverlay(QWidget *parent)
     m_infoPanel->adjustSize();
 }
 
-void GameOverlay::updateGameRect(const QRect &gameRect)
+void GameOverlay::updateGameRect(const QRect &physicalRect)
 {
-    // TODO Phase 5: convert Win32 physical px → Qt logical px via QScreen::devicePixelRatio
-    setGeometry(gameRect);
+#ifdef Q_OS_WIN
+    // Win32 GetWindowRect returns physical px; Qt setGeometry wants logical px.
+    const QScreen *scr = QGuiApplication::primaryScreen();
+    const qreal    dpr = scr ? scr->devicePixelRatio() : 1.0;
+    setGeometry(QRect(
+        qRound(physicalRect.x()      / dpr),
+        qRound(physicalRect.y()      / dpr),
+        qRound(physicalRect.width()  / dpr),
+        qRound(physicalRect.height() / dpr)
+    ));
+#else
+    setGeometry(physicalRect);
+#endif
 }
 
 void GameOverlay::setGameVisible(bool found)

@@ -28,6 +28,22 @@ all preset=default_preset: (test preset)
 run preset=default_preset: (build preset)
     build/{{preset}}/src/l2p-poe1.exe
 
+# Install to dist/ and run windeployqt / macdeployqt via cmake --install
+package preset=default_preset: (build preset)
+    cmake --install build/{{preset}}
+
+# Linux: package as AppImage (requires linuxdeployqt on PATH)
+package-linux preset=default_preset: (package preset)
+    linuxdeployqt dist/{{preset}}/l2p-poe1 -appimage
+
+# macOS: package .app bundle into a DMG (macdeployqt is included with Qt)
+package-mac preset=default_preset: (build preset)
+    macdeployqt build/{{preset}}/src/l2p-poe1.app -dmg
+
+# Windows: build Inno Setup installer (requires ISCC on PATH, run after `just package`)
+installer preset=default_preset: (package preset)
+    ISCC installer/windows.iss
+
 # Remove all build and dist artifacts
 clean:
     cmake -E rm -rf build dist
