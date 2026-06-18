@@ -32,3 +32,5 @@ _reference/
 _live/
 .plan/
 .plans/
+
+_rust_archive
