@@ -7,7 +7,9 @@
 
 class QPlainTextEdit;
 class QMenu;
+class QTimer;
 class SettingsDialog;
+class WindowTracker;
 
 class MainWindow : public QMainWindow
 {
@@ -15,6 +17,7 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
 
     bool startMinimized() const { return m_config.startMinimized; }
 
@@ -27,6 +30,7 @@ private slots:
     void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
     void showSettings();
     void onConfigChanged();
+    void onPollTimer();
 
 private:
     void showWindow();
@@ -38,4 +42,9 @@ private:
     QSystemTrayIcon *m_tray{};
     QMenu           *m_trayMenu{};
     SettingsDialog  *m_settingsDialog{};
+
+    WindowTracker   *m_tracker{};
+    QTimer          *m_pollTimer{};
+    bool             m_gameFound{false};
+    QString          m_detectedInstallDir;
 };

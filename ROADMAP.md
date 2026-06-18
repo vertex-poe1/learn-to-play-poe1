@@ -58,14 +58,14 @@
 
 ---
 
-## Phase 3 — Window Tracker
+## Phase 3 — Window Tracker *(complete)*
 
-- [ ] Abstract `WindowTracker` interface (port `tracker.rs`)
-- [ ] Windows implementation: `FindWindowA` + `GetWindowRect` + `QueryFullProcessImageNameW`
-- [ ] Linux implementation: X11 window tree walk by title
-- [ ] Auto-detect game install dir from process image path (Windows)
-- [ ] Poll game window every 1 s; update log on state change
-- [ ] Log entry when install directory is auto-detected
+- [x] Abstract `WindowTracker` interface (port `tracker.rs`)
+- [x] Windows implementation: `FindWindowA` + `GetWindowRect` + `QueryFullProcessImageNameW`
+- [x] Linux implementation: X11 window tree walk by title
+- [x] Auto-detect game install dir from process image path (Windows)
+- [x] Poll game window every 1 s; update log on state change
+- [x] Log entry when install directory is auto-detected
 
 ---
 

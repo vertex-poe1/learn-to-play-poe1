@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "SettingsDialog.h"
+#include "WindowTracker.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -8,6 +9,7 @@
 #include <QMenu>
 #include <QPlainTextEdit>
 #include <QSystemTrayIcon>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -24,6 +26,18 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupTray();
     log(QStringLiteral("Application started. Config: %1").arg(AppConfig::configPath()));
+
+    m_tracker = WindowTracker::create();
+
+    m_pollTimer = new QTimer(this);
+    m_pollTimer->setInterval(1000);
+    connect(m_pollTimer, &QTimer::timeout, this, &MainWindow::onPollTimer);
+    m_pollTimer->start();
+}
+
+MainWindow::~MainWindow()
+{
+    delete m_tracker;
 }
 
 void MainWindow::setupTray()
@@ -66,6 +80,36 @@ void MainWindow::showSettings()
 void MainWindow::onConfigChanged()
 {
     log("Settings saved.");
+    // Reset detected state so the tracker re-evaluates with updated exe name.
+    m_detectedInstallDir.clear();
+}
+
+void MainWindow::onPollTimer()
+{
+#ifdef Q_OS_WIN
+    const QString &exeName = m_config.windowsExecutableName;
+#else
+    const QString &exeName = m_config.linuxExecutableName;
+#endif
+
+    const WindowState state = m_tracker->poll(exeName);
+
+    if (state.found != m_gameFound) {
+        m_gameFound = state.found;
+        if (state.found)
+            log(QStringLiteral("Game window detected (%1).").arg(exeName));
+        else
+            log(QStringLiteral("Game window lost (%1).").arg(exeName));
+    }
+
+    if (state.found && m_config.autoDetectInstallDir
+        && !state.installDir.isEmpty()
+        && state.installDir != m_detectedInstallDir) {
+        m_detectedInstallDir    = state.installDir;
+        m_config.installDir     = state.installDir;
+        m_config.save();
+        log(QStringLiteral("Install directory auto-detected: %1").arg(state.installDir));
+    }
 }
 
 void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
