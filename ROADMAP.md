@@ -19,26 +19,26 @@
 
 ---
 
-## Phase 1 — Shell Application
+## Phase 1 — Shell Application *(complete)*
 
 ### Qt Project Setup
-- [ ] Set Windows manifest and version resource
-- [ ] Embed application icon (`assets/logo/vertex-icon.png` / `.svg`)
-- [ ] `windeployqt` CMake install step for Windows distribution
+- [ ] Set Windows manifest and version resource *(Phase 5)*
+- [x] Embed application icon (`assets/logo/vertex-icon.png`) — runtime app/tray icon via Qt resources
+- [ ] `windeployqt` CMake install step for Windows distribution *(Phase 5)*
 
 ### Window & Tray
-- [ ] `QApplication` + `QMainWindow` main window
-- [ ] `QSystemTrayIcon` with icon from assets
-- [ ] Tray context menu: Open, Settings, Exit
-- [ ] Left-click tray icon → show/raise main window
-- [ ] Hide to tray on window close (override `closeEvent`)
-- [ ] Start minimized setting (launch hidden, tray visible)
-- [ ] Restore window to foreground from tray
+- [x] `QApplication` + `QMainWindow` main window (`src/MainWindow.h/.cpp`)
+- [x] `QSystemTrayIcon` with icon from assets
+- [x] Tray context menu: Open, Settings (disabled), Exit
+- [x] Left-click tray icon → show/raise main window
+- [x] Hide to tray on window close (override `closeEvent`)
+- [ ] Start minimized setting (launch hidden, tray visible) *(Phase 2 — needs config)*
+- [x] Restore window to foreground from tray
 
 ### Activity Log
-- [ ] Scrolling timestamped log view (`QPlainTextEdit`) — auto-scroll
-- [ ] Log entry on app start
-- [ ] Log entry when game window detected / lost
+- [x] Scrolling timestamped log view (`QPlainTextEdit`) — auto-scroll
+- [x] Log entry on app start
+- [ ] Log entry when game window detected / lost *(Phase 3 — needs tracker)*
 
 ---
 

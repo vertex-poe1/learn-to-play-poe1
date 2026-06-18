@@ -1,17 +1,14 @@
 #include <QApplication>
-#include <QLabel>
-#include <QMainWindow>
+#include "MainWindow.h"
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName("Learn to Play PoE1");
     app.setApplicationVersion("0.1.0");
+    app.setQuitOnLastWindowClosed(false);
 
-    QMainWindow window;
-    window.setWindowTitle("Learn to Play PoE1");
-    window.setCentralWidget(new QLabel("Phase 0: toolchain works.", &window));
-    window.resize(640, 400);
+    MainWindow window;
     window.show();
 
     return app.exec();
