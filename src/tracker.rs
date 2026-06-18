@@ -8,6 +8,7 @@ pub struct WindowRect {
 
 pub trait WindowTracker {
     fn get_window_rect(&mut self, title: &str) -> Option<WindowRect>;
+    fn get_window_process_path(&mut self, title: &str) -> Option<String>;
 }
 
 pub fn create_tracker() -> Box<dyn WindowTracker> {
@@ -29,9 +30,11 @@ pub fn create_tracker() -> Box<dyn WindowTracker> {
 mod windows_tracker {
     use super::{WindowRect, WindowTracker};
     use std::ffi::CString;
-    use windows::Win32::Foundation::RECT;
-    use windows::Win32::UI::WindowsAndMessaging::{FindWindowA, GetWindowRect};
+    use windows::Win32::Foundation::{RECT, MAX_PATH};
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowA, GetWindowRect, GetWindowThreadProcessId};
+    use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW};
     use windows::core::PCSTR;
+    use std::os::windows::ffi::OsStringExt;
 
     pub struct WindowsTracker {}
 
@@ -60,6 +63,33 @@ mod windows_tracker {
                     });
                 }
             }
+            None
+        }
+
+        fn get_window_process_path(&mut self, title: &str) -> Option<String> {
+            let c_title = CString::new(title).ok()?;
+            let hwnd = unsafe { FindWindowA(None, PCSTR(c_title.as_ptr() as *const u8)) };
+            if hwnd.0 == 0 {
+                return None;
+            }
+
+            let mut process_id = 0;
+            unsafe { GetWindowThreadProcessId(hwnd, Some(&mut process_id)) };
+            if process_id == 0 {
+                return None;
+            }
+
+            let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) }.ok()?;
+            
+            let mut buffer = [0u16; MAX_PATH as usize];
+            let mut size = buffer.len() as u32;
+            
+            let success = unsafe { QueryFullProcessImageNameW(handle, windows::Win32::System::Threading::PROCESS_NAME_FORMAT(0), windows::core::PWSTR(buffer.as_mut_ptr()), &mut size) };
+            if success.is_ok() {
+                let os_string = std::ffi::OsString::from_wide(&buffer[..size as usize]);
+                return os_string.into_string().ok();
+            }
+
             None
         }
     }
@@ -147,6 +177,10 @@ mod linux_tracker {
             }
             None
         }
+
+        fn get_window_process_path(&mut self, _title: &str) -> Option<String> {
+            None
+        }
     }
 }
 
@@ -162,6 +196,9 @@ mod dummy_tracker {
     }
     impl WindowTracker for DummyTracker {
         fn get_window_rect(&mut self, _title: &str) -> Option<WindowRect> {
+            None
+        }
+        fn get_window_process_path(&mut self, _title: &str) -> Option<String> {
             None
         }
     }

@@ -1,7 +1,9 @@
+// .vscode/extensions.json (JSON — VS Code Config)
 {
   "recommendations": [
     "bierner.github-markdown-preview",
     "editorconfig.editorconfig",
-    "usernamehw.errorlens"
+    "usernamehw.errorlens",
+    "rust-lang.rust-analyzer"
   ]
 }

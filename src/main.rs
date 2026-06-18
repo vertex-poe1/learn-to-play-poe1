@@ -26,8 +26,8 @@ struct MainApp {
     last_tracker_check: Instant,
     overlay_exe: std::path::PathBuf,
     was_visible: Option<bool>,
-    last_window_pos: Option<egui::Pos2>,
     state: Arc<Mutex<AppState>>,
+    log_messages: String,
 }
 
 impl MainApp {
@@ -109,7 +109,7 @@ impl MainApp {
                 }
                 if changed {
                     let st = state_clone.lock().unwrap();
-                    let is_visible = st.show_main_window || st.show_settings;
+                    let _is_visible = st.show_main_window || st.show_settings;
                     
                     if st.exit_requested {
                         std::process::exit(0);
@@ -130,9 +130,14 @@ impl MainApp {
             last_tracker_check: Instant::now() - std::time::Duration::from_secs(10), // force immediate check
             overlay_exe,
             was_visible: None,
-            last_window_pos: None,
             state,
+            log_messages: format!("[{}] Application started.\n", chrono::Local::now().format("%H:%M")),
         }
+    }
+
+    pub fn log_message(&mut self, msg: &str) {
+        let time_str = chrono::Local::now().format("%H:%M").to_string();
+        self.log_messages.push_str(&format!("[{}] {}\n", time_str, msg));
     }
 
     fn sync_config(&mut self) {
@@ -174,26 +179,11 @@ impl eframe::App for MainApp {
         let is_visible = self.show_main_window || self.show_settings;
 
         if self.was_visible != Some(is_visible) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(is_visible));
             if is_visible {
-                if let Some(pos) = self.last_window_pos {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
-                } else {
-                    // Default center-ish position if no previous position
-                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(200.0, 200.0)));
-                }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            } else {
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(-10000.0, -10000.0)));
             }
             self.was_visible = Some(is_visible);
-        }
-
-        if is_visible {
-            if let Some(rect) = ctx.input(|i| i.viewport().outer_rect) {
-                if rect.min.x > -5000.0 {
-                    self.last_window_pos = Some(rect.min);
-                }
-            }
         }
 
         // ALWAYS draw CentralPanel so the window is never black if it's visible
@@ -206,7 +196,18 @@ impl eframe::App for MainApp {
                     }
                 });
             });
-            ui.label("Hello world");
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    ui.add_sized(
+                        ui.available_size(),
+                        egui::TextEdit::multiline(&mut self.log_messages)
+                            .interactive(false)
+                            .frame(false)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                });
         });
 
         if self.show_settings {
@@ -219,6 +220,17 @@ impl eframe::App for MainApp {
                     if ui.checkbox(&mut self.config.use_game_overlay, "Use game overlay").changed() {
                         config_changed = true;
                     }
+                    if ui.checkbox(&mut self.config.auto_detect_install_dir, "Auto detect game installDir from launch").changed() {
+                        config_changed = true;
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label("Install Directory:");
+                        ui.add_enabled_ui(!self.config.auto_detect_install_dir, |ui| {
+                            if ui.text_edit_singleline(&mut self.config.install_dir).changed() {
+                                config_changed = true;
+                            }
+                        });
+                    });
                     ui.horizontal(|ui| {
                         ui.label("Windows Executable:");
                         if ui.text_edit_singleline(&mut self.config.windows_executable_name).changed() {
@@ -270,7 +282,20 @@ impl eframe::App for MainApp {
                 &self.config.linux_executable_name
             };
 
-            let _game_found = self.tracker.get_window_rect(executable_name).is_some();
+            let game_found = self.tracker.get_window_rect(executable_name).is_some();
+
+            if game_found && self.config.auto_detect_install_dir {
+                if let Some(path) = self.tracker.get_window_process_path(executable_name) {
+                    if let Some(dir) = std::path::Path::new(&path).parent() {
+                        let dir_str = dir.to_string_lossy().to_string();
+                        if self.config.install_dir != dir_str {
+                            self.config.install_dir = dir_str.clone();
+                            self.log_message(&format!("Auto-detected game install directory: {}", dir_str));
+                            self.sync_config();
+                        }
+                    }
+                }
+            }
 
             // Overlay launching temporarily disabled while focusing on the regular GUI
             /*
@@ -311,6 +336,15 @@ impl Drop for MainApp {
 }
 
 fn main() -> Result<(), eframe::Error> {
+    // Must be set before winit's EventLoop::new() claims it — Windows only honors
+    // the first call per process. SYSTEM_AWARE prevents WM_DPICHANGED ping-pong
+    // when the window is dragged across monitors with different DPI scales.
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE};
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+    }
+
     let config = load_config();
     
     let icon_bytes = include_bytes!("../assets/logo/vertex-icon.png");
@@ -324,9 +358,11 @@ fn main() -> Result<(), eframe::Error> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_taskbar(false) // Hide from taskbar for tray app
+            // .with_taskbar(false) // Temporarily disabled: WS_EX_TOOLWINDOW causes infinite resize loop on cross-monitor drag in winit
             .with_title("Learn to Play: Path of Exile 1")
-            .with_icon(Arc::new(icon_data)),
+            .with_icon(Arc::new(icon_data))
+            .with_visible(!config.start_minimized)
+            .with_inner_size([600.0, 400.0]),
         run_and_return: false,
         ..Default::default()
     };

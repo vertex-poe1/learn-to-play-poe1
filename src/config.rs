@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub auto_start_on_boot: bool,
     pub start_minimized: bool,
     pub minimize_to_tray: bool,
+    pub auto_detect_install_dir: bool,
+    pub install_dir: String,
 }
 
 impl Default for AppConfig {
@@ -22,6 +24,8 @@ impl Default for AppConfig {
             auto_start_on_boot: false,
             start_minimized: false,
             minimize_to_tray: true,
+            auto_detect_install_dir: true,
+            install_dir: String::new(),
         }
     }
 }

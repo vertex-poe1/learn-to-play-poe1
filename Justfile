@@ -16,3 +16,7 @@ run:
 # Safely update dependencies ensuring they are at least 7 days old
 update:
     cargo cooldown update
+
+# Run all tests
+test:
+    cargo test
