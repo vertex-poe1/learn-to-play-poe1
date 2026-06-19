@@ -30,8 +30,10 @@ protected:
         const int r = height() / 2;
         const QRect border = rect().adjusted(0, 0, -1, -1);
 
-        p.setPen(QPen(QColor(255, 255, 255, 76), 1)); // rgba(255,255,255,0.3)
-        p.setBrush(QColor(255, 255, 255, 13));         // rgba(255,255,255,0.05)
+        QColor borderCol = m_textColor; borderCol.setAlpha(160);
+        QColor fillCol   = m_textColor; fillCol.setAlpha(22);
+        p.setPen(QPen(borderCol, 1));
+        p.setBrush(fillCol);
         p.drawRoundedRect(border, r, r);
 
         const QFontMetrics fm(font());
@@ -127,12 +129,12 @@ NotificationWidget::NotificationWidget(const QString &title, const QString &tag,
         titleLabel->setStyleSheet(QStringLiteral(
             "QLabel { border: none; background: transparent; color: %1;"
             " font-weight: bold; font-size: 15pt; }")
-            .arg(style.textColor.name()));
+            .arg(style.accentColor.name()));
         titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
         leftLayout->addWidget(titleLabel, 0, Qt::AlignTop);
 
         if (!tag.isEmpty()) {
-            auto *tagLabel = new TagLabel(tag, style.timestampColor, left);
+            auto *tagLabel = new TagLabel(tag, style.accentColor, left);
             tagLabel->setStyleSheet(QStringLiteral(
                 "QLabel { font-size: 8pt; }"));
             leftLayout->addWidget(tagLabel, 0, Qt::AlignTop);

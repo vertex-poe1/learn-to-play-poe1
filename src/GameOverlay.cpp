@@ -13,10 +13,11 @@ GameOverlay::GameOverlay(QWidget *parent)
 
     m_infoPanel = new QLabel(QStringLiteral("Learn to Play PoE1"), this);
     m_infoPanel->setStyleSheet(
-        "background: rgba(0, 0, 0, 180);"
-        "color: white;"
+        "background: rgba(15, 10, 2, 210);"
+        "color: #c8a84b;"
         "padding: 6px 10px;"
-        "border-radius: 4px;");
+        "border-radius: 4px;"
+        "border: 1px solid rgba(200, 168, 75, 0.45);");
     m_infoPanel->adjustSize();
 }
 

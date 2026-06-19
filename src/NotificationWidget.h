@@ -6,6 +6,7 @@
 struct NotificationStyle {
     QColor background{45, 45, 45};
     QColor border{80, 80, 80};
+    QColor accentColor{200, 168, 75};    // amber-gold for titles and tags
     QColor textColor{Qt::white};
     QColor bodyColor{180, 180, 180};
     QColor timestampColor{140, 140, 140};

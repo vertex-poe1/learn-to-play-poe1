@@ -5,7 +5,9 @@
       "Bash(just configure *)",
       "PowerShell(echo:*)",
       "Bash(just build *)",
-      "Bash(git -C * log *)"
+      "Bash(git -C * log *)",
+      "Skill(run)",
+      "Skill(run:*)"
     ]
   }
 }
