@@ -18,7 +18,6 @@ signals:
     void configChanged();
 
 private:
-    void onAutoDetectToggled(bool checked);
     void saveAndEmit();
 
     AppConfig &m_config;

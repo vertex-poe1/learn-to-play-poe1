@@ -22,13 +22,15 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
     m_autoDetect->setChecked(config.autoDetectInstallDir);
     form->addRow("Auto-detect install directories:", m_autoDetect);
 
-    m_installDirs = new ListEditor("Path to install directory", this);
+    m_installDirs = new ListEditor({}, this);
+    m_installDirs->setBrowseForDirectory(true);
     m_installDirs->setItems(config.installDirs);
-    m_installDirs->setEnabled(!config.autoDetectInstallDir);
     form->addRow("Install directories:", m_installDirs);
 
     m_exeNames = new ListEditor("Executable name (e.g. PathOfExile_x64Steam.exe)", this);
+    m_exeNames->setBuiltinItems(AppConfig::knownExes());
     m_exeNames->setItems(config.executableNames);
+    m_exeNames->setInputFileBrowser(true);
     form->addRow("Executable names:", m_exeNames);
 
     m_enableOverlay = new QCheckBox(this);
@@ -53,7 +55,6 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
     m_autoStartOnBoot->setEnabled(false);
     form->addRow("Auto start on boot:", m_autoStartOnBoot);
 
-    connect(m_autoDetect,  &QCheckBox::toggled,    this, &SettingsDialog::onAutoDetectToggled);
     connect(m_autoDetect,  &QCheckBox::toggled,    this, [this](bool) { saveAndEmit(); });
     connect(m_installDirs, &ListEditor::itemsChanged, this, &SettingsDialog::saveAndEmit);
     connect(m_exeNames,    &ListEditor::itemsChanged, this, &SettingsDialog::saveAndEmit);
@@ -62,16 +63,18 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
     connect(m_minimizeToTray, &QCheckBox::toggled, this, [this](bool) { saveAndEmit(); });
 }
 
-void SettingsDialog::onAutoDetectToggled(bool checked)
-{
-    m_installDirs->setEnabled(!checked);
-}
-
 void SettingsDialog::saveAndEmit()
 {
     m_config.autoDetectInstallDir = m_autoDetect->isChecked();
     m_config.installDirs          = m_installDirs->items();
-    m_config.executableNames      = m_exeNames->items();
+
+    const QStringList known = AppConfig::knownExes();
+    QStringList userExes;
+    for (const QString &name : m_exeNames->items()) {
+        if (!known.contains(name, Qt::CaseInsensitive))
+            userExes << name;
+    }
+    m_config.executableNames = userExes;
     m_config.useGameOverlay       = m_enableOverlay->isChecked();
     m_config.startMinimized       = m_startMinimized->isChecked();
     m_config.minimizeToTray       = m_minimizeToTray->isChecked();
