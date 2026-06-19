@@ -36,6 +36,7 @@ CATEGORIES = [
     ("job",            ["[JOB]"]),
     ("bundle2",        ["[BUNDLE2]"]),
     ("enumerated",     ["Enumerated"]),
+    ("item_filter",    ["[Item Filter]"]),
 ]
 
 # Lines silently dropped from the remainder (refiltered_client.txt) — we don't care about these
@@ -76,6 +77,9 @@ CATEGORIES_SQL = [
     ("passive_skill_point",       ["You have received a Passive Skill Point.",
                                    "Passive Skill Points."]),
     ("whispers",                  ["@From ", "@To "]),
+    ("kitava_resistance_penalty", ["Kitava's merciless affliction"]),
+    ("achievements",              ["Achivement stored:"]),
+    ("played",                    ["You have played for"]),
 ]
 
 
@@ -196,9 +200,30 @@ with open(OUT, "wb") as f:
 t2 = time.perf_counter()
 print(f"  remainder:  {t2 - t1:.2f}s  ({OUT.stat().st_size // 1024} KB)")
 
+# Phase 2.5: split dialog lines out of the remainder into filtered_client/dialog.txt.
+# Matches lines whose message body starts with ": " (game/NPC prefix) or looks like
+# "Speaker: text" (.+: .+).  Broad on purpose — will be refined later.
+DIALOG_RE = re.compile(r'^: |\S[^:]*: .')
+dialog_out = OUTDIR / "dialog.txt"
+if OUT.exists() and OUT.stat().st_size > 0:
+    raw_lines = OUT.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    dialog, keep = [], []
+    for raw in raw_lines:
+        body = STRIP_RE.sub("", raw.rstrip("\r\n"))
+        if DIALOG_RE.match(body):
+            dialog.append(raw)
+        else:
+            keep.append(raw)
+    dialog_out.write_text("".join(dialog), encoding="utf-8")
+    OUT.write_text("".join(keep), encoding="utf-8")
+
+t25 = time.perf_counter()
+print(f"  dialog:     {t25 - t2:.2f}s  ({dialog_out.stat().st_size // 1024} KB)")
+
 # Phase 3: strip timestamp prefix and dedup every output file
 targets = (
     [(OUT, None)] +
+    [(dialog_out, None)] +
     [(OUTDIR     / f"{name}.txt", CATEGORY_NORMALIZERS.get(name)) for name, _ in CATEGORIES] +
     [(OUTDIR_SQL / f"{name}.txt", CATEGORY_NORMALIZERS.get(name)) for name, _ in CATEGORIES_SQL]
 )

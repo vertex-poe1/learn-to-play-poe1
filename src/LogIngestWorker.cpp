@@ -102,6 +102,31 @@ void LogIngestWorker::start()
     static const QRegularExpression masteryAllocRe(
         R"(Successfully (allocated|unallocated) mastery effect id: ([^,]+), mastery: [^,]+, name: (.+))"
     );
+    // [INFO] : orisRangerAEFive has been slain.
+    static const QRegularExpression deathRe(
+        R"((\S+) has been slain\.)"
+    );
+    // [INFO] #DDIsBrokenAF: someone can kill my black sycle boss pls
+    // channel prefix: '#' global, '$' trade, '%' party, '&' guild
+    static const QRegularExpression chatRe(
+        R"(([#$%&])(\S+): (.*))"
+    );
+    // [INFO] : You have played for 15 hours, 41 minutes, and 32 seconds.
+    static const QRegularExpression playedRe(
+        R"(You have played for .+?\.)"
+    );
+    static const QRegularExpression playedUnitRe(
+        R"((\d+) (hours?|minutes?|seconds?))"
+    );
+    // [INFO] Achivement stored: AllOptionalDialogue  (note: typo in log is intentional)
+    static const QRegularExpression achievementRe(
+        R"(Achivement stored: (\S+))"
+    );
+    // Noise: "Client couldn't execute a triggered action from the server." and
+    // "Instant/Triggered action..." each emit 1–5 followup key=N / key: N lines.
+    static const QRegularExpression triggerFollowupRe(
+        R"([\w ]+[=:] ?\d+)"
+    );
 
     // ── prepared statements ──────────────────────────────────────────────────
 
@@ -130,6 +155,16 @@ void LogIngestWorker::start()
     sqlite3_stmt *passiveSelectStmt    = nullptr;
     sqlite3_stmt *passiveAllocStmt     = nullptr;
     sqlite3_stmt *whisperStmt          = nullptr;
+    sqlite3_stmt *deathStmt            = nullptr;
+    sqlite3_stmt *pubCharUpsertStmt    = nullptr;
+    sqlite3_stmt *pubCharSelectStmt    = nullptr;
+    sqlite3_stmt *chatStmt             = nullptr;
+    sqlite3_stmt *achievUpsertStmt     = nullptr;
+    sqlite3_stmt *achievSelectStmt     = nullptr;
+    sqlite3_stmt *achievEventStmt      = nullptr;
+    sqlite3_stmt *playedEventStmt        = nullptr;
+    sqlite3_stmt *charPlayedStmt         = nullptr;
+    sqlite3_stmt *charPlayedFromSpanStmt = nullptr;
     sqlite3_stmt *sourceStmt           = nullptr;
 
     sqlite3_prepare_v2(db,
@@ -222,6 +257,40 @@ void LogIngestWorker::start()
         "INSERT OR IGNORE INTO whispers(session_id, direction, player_name, message, occurred_at) VALUES(?,?,?,?,?);",
         -1, &whisperStmt, nullptr);
     sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO character_deaths(session_id, char_id, area_id, level, occurred_at) VALUES(?,?,?,?,?);",
+        -1, &deathStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO public_chars(name) VALUES(?);",
+        -1, &pubCharUpsertStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "SELECT id FROM public_chars WHERE name=?;",
+        -1, &pubCharSelectStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO chats(session_id, public_char_id, channel, message, occurred_at) VALUES(?,?,?,?,?);",
+        -1, &chatStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO character_played_events(session_id, span_id, played_secs, occurred_at) VALUES(?,?,?,?);",
+        -1, &playedEventStmt, nullptr);
+    // Immediate update when char is already known at event time.
+    sqlite3_prepare_v2(db,
+        "UPDATE characters SET played_secs=MAX(played_secs,?) WHERE id=?;",
+        -1, &charPlayedStmt, nullptr);
+    // Called from the level-up handler: syncs played_secs for any played events
+    // already recorded in the span that just had its char_id filled in.
+    sqlite3_prepare_v2(db,
+        "UPDATE characters SET played_secs=MAX(played_secs,"
+        "COALESCE((SELECT MAX(played_secs) FROM character_played_events WHERE span_id=?),0)) WHERE id=?;",
+        -1, &charPlayedFromSpanStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO achievements(code) VALUES(?);",
+        -1, &achievUpsertStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "SELECT id FROM achievements WHERE code=?;",
+        -1, &achievSelectStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO achievement_events(session_id, achievement_id, occurred_at) VALUES(?,?,?);",
+        -1, &achievEventStmt, nullptr);
+    sqlite3_prepare_v2(db,
         "UPDATE installs SET "
         "file_created_at=?, file_modified_at=?, file_size=?, last_byte_offset=? "
         "WHERE id=?;",
@@ -250,6 +319,7 @@ void LogIngestWorker::start()
     qint64  sessionAfkSecs    = 0;
     QString afkOnTs;
     qint64  sessionCharId     = -1;
+    int     sessionCharLevel  = -1;
     qint64  sessionAreaId     = -1;
 
     qint64  currentSpanId     = -1;
@@ -353,7 +423,8 @@ void LogIngestWorker::start()
     // ── main loop ────────────────────────────────────────────────────────────
 
     QString pendingCode;
-    int     pendingLevel  = 0;
+    int     pendingLevel           = 0;
+    bool    skipTriggerFollowup    = false;
 
     constexpr int kChunkSize    = 10'000;
     qint64        safeCommitPos = m_resumeOffset > 0 ? m_resumeOffset : 0;
@@ -378,6 +449,18 @@ void LogIngestWorker::start()
         const QString level   = hdr.captured(2);
         const QString message = hdr.captured(4).trimmed();
 
+        // ── noise filter ─────────────────────────────────────────────────────
+        if (skipTriggerFollowup) {
+            if (triggerFollowupRe.match(message).hasMatch())
+                continue;
+            skipTriggerFollowup = false;
+        }
+        if (message.startsWith(QLatin1String("Client couldn't execute a triggered action")) ||
+            message.startsWith(QLatin1String("Instant/Triggered action"))) {
+            skipTriggerFollowup = true;
+            continue;
+        }
+
         // ── session boundary ─────────────────────────────────────────────────
         if (message.contains(QLatin1String("LOG FILE OPENING"))) {
             closeSession(prevTs);
@@ -394,10 +477,11 @@ void LogIngestWorker::start()
                 sessionId = sqlite3_column_int64(sessionSelectStmt, 0);
             sqlite3_reset(sessionSelectStmt);
 
-            sessionStartTs = ts;
-            sessionAfkSecs = 0;
-            sessionCharId  = -1;
-            sessionAreaId  = -1;
+            sessionStartTs   = ts;
+            sessionAfkSecs   = 0;
+            sessionCharId    = -1;
+            sessionCharLevel = -1;
+            sessionAreaId    = -1;
 
             // Session starts at char select — open a NULL-area span.
             openSpan(ts, -1);
@@ -491,7 +575,8 @@ void LogIngestWorker::start()
                         sqlite3_step(levelEventStmt);
                         sqlite3_reset(levelEventStmt);
 
-                        sessionCharId = charId;
+                        sessionCharId    = charId;
+                        sessionCharLevel = charLevel;
 
                         // Backfill char_id on the current open span now that we know it.
                         if (currentSpanId >= 0) {
@@ -499,6 +584,13 @@ void LogIngestWorker::start()
                             sqlite3_bind_int64(spanUpdateCharStmt, 2, currentSpanId);
                             sqlite3_step(spanUpdateCharStmt);
                             sqlite3_reset(spanUpdateCharStmt);
+
+                            // Sync played_secs for any /played events recorded in this span
+                            // before the character was known.
+                            sqlite3_bind_int64(charPlayedFromSpanStmt, 1, currentSpanId);
+                            sqlite3_bind_int64(charPlayedFromSpanStmt, 2, charId);
+                            sqlite3_step(charPlayedFromSpanStmt);
+                            sqlite3_reset(charPlayedFromSpanStmt);
                         }
                     }
                 }
@@ -565,6 +657,71 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
                 sqlite3_reset(questEventStmt);
+            }
+
+            // Fires twice: once after Act 5 Kitava (-30%) and once after Act 10 Kitava (-60%).
+            if (sessionId >= 0 && message.contains(QLatin1String("Kitava's merciless affliction"))) {
+                sqlite3_bind_int64(questEventStmt, 1, sessionId);
+                if (sessionAreaId < 0) sqlite3_bind_null (questEventStmt, 2);
+                else                   sqlite3_bind_int64(questEventStmt, 2, sessionAreaId);
+                sqlite3_bind_text (questEventStmt, 3, "kitava_resistance_penalty", -1, SQLITE_STATIC);
+                sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sqlite3_step(questEventStmt);
+                sqlite3_reset(questEventStmt);
+            }
+
+            // /played command — total in-game time on the current character
+            if (playedRe.match(message).hasMatch() && sessionId >= 0) {
+                qint64 playedSecs = 0;
+                auto unitIt = playedUnitRe.globalMatch(message);
+                while (unitIt.hasNext()) {
+                    const auto m  = unitIt.next();
+                    const qint64 val = m.captured(1).toLongLong();
+                    const QChar  u   = m.captured(2).at(0);
+                    if      (u == QLatin1Char('h')) playedSecs += val * 3600;
+                    else if (u == QLatin1Char('m')) playedSecs += val * 60;
+                    else                            playedSecs += val;
+                }
+
+                sqlite3_bind_int64(playedEventStmt, 1, sessionId);
+                if (currentSpanId < 0) sqlite3_bind_null (playedEventStmt, 2);
+                else                   sqlite3_bind_int64(playedEventStmt, 2, currentSpanId);
+                sqlite3_bind_int64(playedEventStmt, 3, playedSecs);
+                sqlite3_bind_text (playedEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sqlite3_step(playedEventStmt);
+                sqlite3_reset(playedEventStmt);
+
+                // If we already know the character, update played_secs immediately.
+                if (sessionCharId >= 0) {
+                    sqlite3_bind_int64(charPlayedStmt, 1, playedSecs);
+                    sqlite3_bind_int64(charPlayedStmt, 2, sessionCharId);
+                    sqlite3_step(charPlayedStmt);
+                    sqlite3_reset(charPlayedStmt);
+                }
+            }
+
+            // Achievement unlocked
+            const auto achievM = achievementRe.match(message);
+            if (achievM.hasMatch() && sessionId >= 0) {
+                const QByteArray codeBytes = achievM.captured(1).toUtf8();
+
+                sqlite3_bind_text(achievUpsertStmt, 1, codeBytes.constData(), codeBytes.size(), SQLITE_STATIC);
+                sqlite3_step(achievUpsertStmt);
+                sqlite3_reset(achievUpsertStmt);
+
+                sqlite3_bind_text(achievSelectStmt, 1, codeBytes.constData(), codeBytes.size(), SQLITE_STATIC);
+                qint64 achievId = -1;
+                if (sqlite3_step(achievSelectStmt) == SQLITE_ROW)
+                    achievId = sqlite3_column_int64(achievSelectStmt, 0);
+                sqlite3_reset(achievSelectStmt);
+
+                if (achievId >= 0) {
+                    sqlite3_bind_int64(achievEventStmt, 1, sessionId);
+                    sqlite3_bind_int64(achievEventStmt, 2, achievId);
+                    sqlite3_bind_text (achievEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                    sqlite3_step(achievEventStmt);
+                    sqlite3_reset(achievEventStmt);
+                }
             }
 
             // Passive skill allocation / unallocation
@@ -646,6 +803,60 @@ void LogIngestWorker::start()
                 sqlite3_reset(whisperStmt);
             }
 
+            // Character death
+            const auto deathM = deathRe.match(message);
+            if (deathM.hasMatch() && sessionId >= 0) {
+                const QByteArray charNameBytes = deathM.captured(1).toUtf8();
+
+                sqlite3_bind_text(charSelectStmt, 1, charNameBytes.constData(), charNameBytes.size(), SQLITE_STATIC);
+                qint64 deadCharId = -1;
+                if (sqlite3_step(charSelectStmt) == SQLITE_ROW)
+                    deadCharId = sqlite3_column_int64(charSelectStmt, 0);
+                sqlite3_reset(charSelectStmt);
+
+                if (deadCharId >= 0) {
+                    sqlite3_bind_int64(deathStmt, 1, sessionId);
+                    sqlite3_bind_int64(deathStmt, 2, deadCharId);
+                    if (sessionAreaId < 0) sqlite3_bind_null (deathStmt, 3);
+                    else                   sqlite3_bind_int64(deathStmt, 3, sessionAreaId);
+                    if (deadCharId == sessionCharId && sessionCharLevel > 0)
+                        sqlite3_bind_int(deathStmt, 4, sessionCharLevel);
+                    else
+                        sqlite3_bind_null(deathStmt, 4);
+                    sqlite3_bind_text(deathStmt, 5, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                    sqlite3_step(deathStmt);
+                    sqlite3_reset(deathStmt);
+                }
+            }
+
+            // Public chat (#global $trade %party &guild)
+            const auto chatM = chatRe.match(message);
+            if (chatM.hasMatch() && sessionId >= 0) {
+                const QByteArray channelBytes  = chatM.captured(1).toUtf8();
+                const QByteArray speakerBytes  = chatM.captured(2).toUtf8();
+                const QByteArray messageBytes  = chatM.captured(3).toUtf8();
+
+                sqlite3_bind_text(pubCharUpsertStmt, 1, speakerBytes.constData(), speakerBytes.size(), SQLITE_STATIC);
+                sqlite3_step(pubCharUpsertStmt);
+                sqlite3_reset(pubCharUpsertStmt);
+
+                sqlite3_bind_text(pubCharSelectStmt, 1, speakerBytes.constData(), speakerBytes.size(), SQLITE_STATIC);
+                qint64 pubCharId = -1;
+                if (sqlite3_step(pubCharSelectStmt) == SQLITE_ROW)
+                    pubCharId = sqlite3_column_int64(pubCharSelectStmt, 0);
+                sqlite3_reset(pubCharSelectStmt);
+
+                if (pubCharId >= 0) {
+                    sqlite3_bind_int64(chatStmt, 1, sessionId);
+                    sqlite3_bind_int64(chatStmt, 2, pubCharId);
+                    sqlite3_bind_text (chatStmt, 3, channelBytes.constData(),  channelBytes.size(),  SQLITE_STATIC);
+                    sqlite3_bind_text (chatStmt, 4, messageBytes.constData(),  messageBytes.size(),  SQLITE_STATIC);
+                    sqlite3_bind_text (chatStmt, 5, tsBytes.constData(),       tsBytes.size(),       SQLITE_STATIC);
+                    sqlite3_step(chatStmt);
+                    sqlite3_reset(chatStmt);
+                }
+            }
+
             // Area entered (correlated with pending Generating line)
             if (!pendingCode.isEmpty()) {
                 const auto entM = enteredRe.match(message);
@@ -725,6 +936,16 @@ void LogIngestWorker::start()
     sqlite3_finalize(passiveSelectStmt);
     sqlite3_finalize(passiveAllocStmt);
     sqlite3_finalize(whisperStmt);
+    sqlite3_finalize(deathStmt);
+    sqlite3_finalize(pubCharUpsertStmt);
+    sqlite3_finalize(pubCharSelectStmt);
+    sqlite3_finalize(chatStmt);
+    sqlite3_finalize(achievUpsertStmt);
+    sqlite3_finalize(achievSelectStmt);
+    sqlite3_finalize(achievEventStmt);
+    sqlite3_finalize(playedEventStmt);
+    sqlite3_finalize(charPlayedStmt);
+    sqlite3_finalize(charPlayedFromSpanStmt);
     sqlite3_finalize(sourceStmt);
     sqlite3_close(db);
 

@@ -3,7 +3,7 @@
 #include <sqlite3.h>
 #include <cstdio>
 
-static constexpr int kDbVersion = 5;
+static constexpr int kDbVersion = 9;
 
 static void execSql(sqlite3 *db, const char *sql)
 {
@@ -237,6 +237,67 @@ void Database::initSchema()
         );
     )");
 
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS character_deaths (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  INTEGER NOT NULL REFERENCES sessions(id),
+            char_id     INTEGER NOT NULL REFERENCES characters(id),
+            area_id     INTEGER REFERENCES areas(id),
+            level       INTEGER,
+            occurred_at TEXT    NOT NULL,
+            UNIQUE(session_id, char_id, occurred_at)
+        );
+    )");
+
+    // Players seen only in public chat — name only, no class/level info required.
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS public_chars (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT    NOT NULL UNIQUE
+        );
+    )");
+
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS character_played_events (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  INTEGER NOT NULL REFERENCES sessions(id),
+            span_id     INTEGER REFERENCES area_time_spans(id),
+            played_secs INTEGER NOT NULL,
+            occurred_at TEXT    NOT NULL,
+            UNIQUE(session_id, occurred_at)
+        );
+    )");
+
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS achievements (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT    NOT NULL UNIQUE
+        );
+    )");
+
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS achievement_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id     INTEGER NOT NULL REFERENCES sessions(id),
+            achievement_id INTEGER NOT NULL REFERENCES achievements(id),
+            occurred_at    TEXT    NOT NULL,
+            UNIQUE(session_id, achievement_id, occurred_at)
+        );
+    )");
+
+    // channel stores the raw prefix character: '#' global, '$' trade, '%' party, '&' guild.
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS chats (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id     INTEGER NOT NULL REFERENCES sessions(id),
+            public_char_id INTEGER NOT NULL REFERENCES public_chars(id),
+            channel        TEXT    NOT NULL,
+            message        TEXT    NOT NULL,
+            occurred_at    TEXT    NOT NULL,
+            UNIQUE(session_id, occurred_at, public_char_id, channel)
+        );
+    )");
+
     const int version = readUserVersion(m_db);
     if (version == 0)
         setUserVersion(m_db, kDbVersion);
@@ -247,10 +308,74 @@ void Database::initSchema()
 void Database::migrate(int fromVersion)
 {
     // v1→v2: quest_events; v2→v3: passive_skills + passive_skill_allocations;
-    // v3→v4: whispers; v4→v5: passive_skills.is_mastery, passive_skill_allocations.action.
+    // v3→v4: whispers; v4→v5: passive_skills.is_mastery, passive_skill_allocations.action;
+    // v5→v6: character_deaths; v6→v7: public_chars + chats; v7→v8: achievements + achievement_events;
+    // v8→v9: character_played_events + characters.played_secs.
     if (fromVersion < 5) {
         execSql(m_db, "ALTER TABLE passive_skills ADD COLUMN is_mastery INTEGER NOT NULL DEFAULT 0;");
         execSql(m_db, "ALTER TABLE passive_skill_allocations ADD COLUMN action TEXT NOT NULL DEFAULT 'allocated';");
+    }
+    if (fromVersion < 6) {
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS character_deaths (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  INTEGER NOT NULL REFERENCES sessions(id),
+                char_id     INTEGER NOT NULL REFERENCES characters(id),
+                area_id     INTEGER REFERENCES areas(id),
+                level       INTEGER,
+                occurred_at TEXT    NOT NULL,
+                UNIQUE(session_id, char_id, occurred_at)
+            );
+        )");
+    }
+    if (fromVersion < 7) {
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS public_chars (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT    NOT NULL UNIQUE
+            );
+        )");
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS chats (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id     INTEGER NOT NULL REFERENCES sessions(id),
+                public_char_id INTEGER NOT NULL REFERENCES public_chars(id),
+                channel        TEXT    NOT NULL,
+                message        TEXT    NOT NULL,
+                occurred_at    TEXT    NOT NULL,
+                UNIQUE(session_id, occurred_at, public_char_id, channel)
+            );
+        )");
+    }
+    if (fromVersion < 8) {
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS achievements (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT    NOT NULL UNIQUE
+            );
+        )");
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS achievement_events (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id     INTEGER NOT NULL REFERENCES sessions(id),
+                achievement_id INTEGER NOT NULL REFERENCES achievements(id),
+                occurred_at    TEXT    NOT NULL,
+                UNIQUE(session_id, achievement_id, occurred_at)
+            );
+        )");
+    }
+    if (fromVersion < 9) {
+        execSql(m_db, "ALTER TABLE characters ADD COLUMN played_secs INTEGER NOT NULL DEFAULT 0;");
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS character_played_events (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  INTEGER NOT NULL REFERENCES sessions(id),
+                char_id     INTEGER REFERENCES characters(id),
+                played_secs INTEGER NOT NULL,
+                occurred_at TEXT    NOT NULL,
+                UNIQUE(session_id, occurred_at)
+            );
+        )");
     }
     setUserVersion(m_db, kDbVersion);
 }
