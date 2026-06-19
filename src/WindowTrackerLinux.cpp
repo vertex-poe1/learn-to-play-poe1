@@ -72,6 +72,7 @@ static bool walkTree(Display *dpy, Window root, const QStringList &executableNam
                             out.executableName = baseName;
                             out.rect           = QRect(sx, sy, attrs.width, attrs.height);
                             out.installDir     = QFileInfo(fullPath).absolutePath();
+                            out.pid            = static_cast<quint32>(pid);
                             found              = true;
                         }
                         break;

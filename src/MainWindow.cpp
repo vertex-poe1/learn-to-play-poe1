@@ -6,11 +6,9 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
-#include <QDateTime>
 #include <QIcon>
 #include <QMenu>
 #include <QMenuBar>
-#include <QPlainTextEdit>
 #include <QSystemTrayIcon>
 #include <QTimer>
 
@@ -21,15 +19,15 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowIcon(QIcon(":/icons/vertex-icon.png"));
     resize(720, 480);
 
-    m_log = new QPlainTextEdit(this);
-    m_log->setReadOnly(true);
+    m_log = new NotificationsPanel(this);
     setCentralWidget(m_log);
 
     m_config = AppConfig::load();
 
     setupMenuBar();
     setupTray();
-    log(QStringLiteral("Application started. Config: %1").arg(AppConfig::configPath()));
+    log("Application Started", "app",
+        QStringLiteral("Config at {%1}").arg(AppConfig::configPath()));
 
     m_tracker = WindowTracker::create();
 
@@ -110,7 +108,11 @@ void MainWindow::onPollTimer()
         m_firstPoll = false;
         m_gameFound = state.found;
         if (state.found)
-            log(QStringLiteral("Game is already running (%1).").arg(state.executableName));
+            log("Game is running", "game",
+                QStringLiteral("{%1} with PID {%2} at {%3}")
+                    .arg(state.executableName)
+                    .arg(state.pid)
+                    .arg(state.installDir));
     } else if (state.found != m_gameFound) {
         m_gameFound = state.found;
         if (state.found)
@@ -154,8 +156,13 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 }
 
-void MainWindow::log(const QString &message)
+void MainWindow::log(const QString &message, const NotificationStyle &style)
 {
-    const QString ts = QDateTime::currentDateTime().toString("HH:mm");
-    m_log->appendPlainText(QStringLiteral("[%1] %2").arg(ts, message));
+    m_log->addNotification(message, style);
+}
+
+void MainWindow::log(const QString &title, const QString &tag,
+                     const QString &message, const NotificationStyle &style)
+{
+    m_log->addNotification(title, tag, message, style);
 }

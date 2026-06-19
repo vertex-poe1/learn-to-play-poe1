@@ -5,10 +5,11 @@
 #include <QStringList>
 
 struct WindowState {
-    bool    found{false};
-    QRect   rect;
-    QString installDir;
-    QString executableName; // which name from the candidates list was matched
+    bool     found{false};
+    QRect    rect;
+    QString  installDir;
+    QString  executableName; // which name from the candidates list was matched
+    quint32  pid{0};
 };
 
 class WindowTracker {

@@ -1,12 +1,12 @@
 #pragma once
 
 #include "AppConfig.h"
+#include "NotificationsPanel.h"
 
 #include <QMainWindow>
 #include <QRect>
 #include <QSystemTrayIcon>
 
-class QPlainTextEdit;
 class QMenu;
 class QTimer;
 class GameOverlay;
@@ -23,7 +23,9 @@ public:
 
     bool startMinimized() const { return m_config.startMinimized; }
 
-    void log(const QString &message);
+    void log(const QString &message, const NotificationStyle &style = {});
+    void log(const QString &title, const QString &tag,
+             const QString &message, const NotificationStyle &style = {});
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -41,7 +43,7 @@ private:
 
     AppConfig m_config;
 
-    QPlainTextEdit  *m_log{};
+    NotificationsPanel *m_log{};
     QSystemTrayIcon *m_tray{};
     QMenu           *m_trayMenu{};
     SettingsDialog  *m_settingsDialog{};

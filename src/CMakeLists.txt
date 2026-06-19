@@ -10,6 +10,10 @@ qt_add_executable(l2p-poe1
     ListEditor.h
     MainWindow.cpp
     MainWindow.h
+    NotificationWidget.cpp
+    NotificationWidget.h
+    NotificationsPanel.cpp
+    NotificationsPanel.h
     SettingsDialog.cpp
     SettingsDialog.h
     WindowTracker.h
