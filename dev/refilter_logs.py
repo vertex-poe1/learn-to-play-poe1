@@ -45,6 +45,7 @@ CATEGORIES_SQL = [
     ("guild_joined",       ["Joined guild named"]),
     ("chat_channel_joined", ["You have joined global chat channel"]),
     ("char_level_up",       ["is now level"]),
+    ("session_afk",         ["AFK mode is now"]),
 ]
 
 

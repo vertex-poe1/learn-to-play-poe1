@@ -1,5 +1,6 @@
 #include "LogIngestWorker.h"
 
+#include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -35,6 +36,15 @@ void LogIngestWorker::start()
     }
     execSql(db, "PRAGMA journal_mode=WAL;");
     execSql(db, "PRAGMA synchronous=NORMAL;");
+
+    // ReadOnly is the only acceptable open mode — we must never create or
+    // truncate Client.txt.  Bail silently if the file has disappeared since
+    // the caller checked; that is not an error worth surfacing.
+    if (!QFile::exists(m_logPath)) {
+        sqlite3_close(db);
+        emit finished();
+        return;
+    }
 
     QFile file(m_logPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -76,6 +86,12 @@ void LogIngestWorker::start()
     static const QRegularExpression levelUpRe(
         R"((\S+) \((\w+)\) is now level (\d+))"
     );
+    // [INFO] : AFK mode is now ON.  /  : AFK mode is now OFF.
+    static const QRegularExpression afkRe(
+        R"(AFK mode is now (ON|OFF))"
+    );
+
+    // ── prepared statements ──────────────────────────────────────────────────
 
     sqlite3_stmt *areaUpsertStmt      = nullptr;
     sqlite3_stmt *areaSelectStmt      = nullptr;
@@ -89,6 +105,14 @@ void LogIngestWorker::start()
     sqlite3_stmt *charUpsertStmt      = nullptr;
     sqlite3_stmt *charSelectStmt      = nullptr;
     sqlite3_stmt *levelEventStmt      = nullptr;
+    sqlite3_stmt *sessionInsertStmt   = nullptr;
+    sqlite3_stmt *sessionSelectStmt   = nullptr;
+    sqlite3_stmt *sessionCloseStmt    = nullptr;
+    sqlite3_stmt *afkStmt             = nullptr;
+    sqlite3_stmt *spanInsertStmt      = nullptr;
+    sqlite3_stmt *spanSelectStmt      = nullptr;
+    sqlite3_stmt *spanCloseStmt       = nullptr;
+    sqlite3_stmt *spanUpdateCharStmt  = nullptr;
     sqlite3_stmt *sourceStmt          = nullptr;
 
     sqlite3_prepare_v2(db,
@@ -133,10 +157,44 @@ void LogIngestWorker::start()
         "INSERT OR IGNORE INTO character_level_events(install_id, char_id, level, occurred_at) VALUES(?,?,?,?);",
         -1, &levelEventStmt, nullptr);
     sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO sessions(install_id, started_at) VALUES(?,?);",
+        -1, &sessionInsertStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "SELECT id FROM sessions WHERE install_id=? AND started_at=?;",
+        -1, &sessionSelectStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "UPDATE sessions SET ended_at=?, total_secs=?, afk_secs=?, active_secs=?, "
+        "char_id=?, area_id=? WHERE id=?;",
+        -1, &sessionCloseStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT INTO session_afk(session_id, afk_on_at, afk_off_at) VALUES(?,?,?) "
+        "ON CONFLICT(session_id, afk_on_at) DO UPDATE SET afk_off_at=excluded.afk_off_at;",
+        -1, &afkStmt, nullptr);
+    // area_id and char_id may be NULL (char select / unknown character).
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO area_time_spans(session_id, area_id, char_id, entered_at) VALUES(?,?,?,?);",
+        -1, &spanInsertStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "SELECT id FROM area_time_spans WHERE session_id=? AND entered_at=?;",
+        -1, &spanSelectStmt, nullptr);
+    // duration computed from stored entered_at so we never need it in memory.
+    sqlite3_prepare_v2(db,
+        "UPDATE area_time_spans SET "
+        "exited_at=?, "
+        "duration_secs=CAST((julianday(?)-julianday(entered_at))*86400.0 AS INTEGER), "
+        "afk_secs=? "
+        "WHERE id=?;",
+        -1, &spanCloseStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "UPDATE area_time_spans SET char_id=? WHERE id=?;",
+        -1, &spanUpdateCharStmt, nullptr);
+    sqlite3_prepare_v2(db,
         "UPDATE installs SET "
         "file_created_at=?, file_modified_at=?, file_size=?, last_byte_offset=? "
         "WHERE id=?;",
         -1, &sourceStmt, nullptr);
+
+    // ── helpers ──────────────────────────────────────────────────────────────
 
     auto flushSource = [&](qint64 offset) {
         sqlite3_bind_int64(sourceStmt, 1, fileCreatedAt);
@@ -148,7 +206,119 @@ void LogIngestWorker::start()
         sqlite3_reset(sourceStmt);
     };
 
-    // Pending state: set when we see a Generating line, cleared on the matching entered line.
+    auto tsToSecs = [](const QString &ts) -> qint64 {
+        return QDateTime::fromString(ts, "yyyy-MM-dd HH:mm:ss").toSecsSinceEpoch();
+    };
+
+    // ── session / span state ─────────────────────────────────────────────────
+
+    qint64  sessionId         = -1;
+    QString sessionStartTs;
+    qint64  sessionAfkSecs    = 0;
+    QString afkOnTs;
+    qint64  sessionCharId     = -1;
+    qint64  sessionAreaId     = -1;
+
+    qint64  currentSpanId     = -1;
+    qint64  currentSpanAfkSecs = 0;
+
+    QString lastTs;
+
+    // Closes the current area_time_span, recording exited_at, duration, and
+    // accumulated AFK for that span.  If AFK is active when the span closes
+    // (e.g. the player portalled while AFK) the partial AFK is captured and
+    // afkOnTs is reset to endTs so the next span continues accumulating it.
+    auto closeSpan = [&](const QString &endTs) {
+        if (currentSpanId < 0 || endTs.isEmpty()) return;
+
+        if (!afkOnTs.isEmpty()) {
+            currentSpanAfkSecs += qMax(0LL, tsToSecs(endTs) - tsToSecs(afkOnTs));
+            afkOnTs = endTs;  // AFK continues; reset origin to new span boundary
+        }
+
+        const QByteArray endTsBytes = endTs.toUtf8();
+        sqlite3_bind_text (spanCloseStmt, 1, endTsBytes.constData(), endTsBytes.size(), SQLITE_STATIC);
+        sqlite3_bind_text (spanCloseStmt, 2, endTsBytes.constData(), endTsBytes.size(), SQLITE_STATIC);
+        sqlite3_bind_int64(spanCloseStmt, 3, currentSpanAfkSecs);
+        sqlite3_bind_int64(spanCloseStmt, 4, currentSpanId);
+        sqlite3_step(spanCloseStmt);
+        sqlite3_reset(spanCloseStmt);
+
+        currentSpanId      = -1;
+        currentSpanAfkSecs = 0;
+    };
+
+    // Opens a new area_time_span for the given area (areaId=-1 → char select).
+    // Uses INSERT OR IGNORE + SELECT so resume re-processing is safe.
+    auto openSpan = [&](const QString &ts, qint64 areaId) {
+        if (sessionId < 0) return;
+
+        const QByteArray tsBytes = ts.toUtf8();
+        sqlite3_bind_int64(spanInsertStmt, 1, sessionId);
+        if (areaId < 0)       sqlite3_bind_null (spanInsertStmt, 2);
+        else                  sqlite3_bind_int64(spanInsertStmt, 2, areaId);
+        if (sessionCharId < 0) sqlite3_bind_null (spanInsertStmt, 3);
+        else                   sqlite3_bind_int64(spanInsertStmt, 3, sessionCharId);
+        sqlite3_bind_text(spanInsertStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+        sqlite3_step(spanInsertStmt);
+        sqlite3_reset(spanInsertStmt);
+
+        if (sqlite3_changes(db) > 0) {
+            currentSpanId = sqlite3_last_insert_rowid(db);
+        } else {
+            sqlite3_bind_int64(spanSelectStmt, 1, sessionId);
+            sqlite3_bind_text (spanSelectStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+            currentSpanId = -1;
+            if (sqlite3_step(spanSelectStmt) == SQLITE_ROW)
+                currentSpanId = sqlite3_column_int64(spanSelectStmt, 0);
+            sqlite3_reset(spanSelectStmt);
+        }
+        currentSpanAfkSecs = 0;
+    };
+
+    // Closes the current session, capping any open AFK / span first.
+    auto closeSession = [&](const QString &endTs) {
+        if (sessionId < 0 || endTs.isEmpty()) return;
+
+        closeSpan(endTs);
+
+        if (!afkOnTs.isEmpty()) {
+            sessionAfkSecs += qMax(0LL, tsToSecs(endTs) - tsToSecs(afkOnTs));
+            const QByteArray onBytes  = afkOnTs.toUtf8();
+            const QByteArray offBytes = endTs.toUtf8();
+            sqlite3_bind_int64(afkStmt, 1, sessionId);
+            sqlite3_bind_text (afkStmt, 2, onBytes.constData(),  onBytes.size(),  SQLITE_STATIC);
+            sqlite3_bind_text (afkStmt, 3, offBytes.constData(), offBytes.size(), SQLITE_STATIC);
+            sqlite3_step(afkStmt);
+            sqlite3_reset(afkStmt);
+            afkOnTs.clear();
+        }
+
+        const qint64 totalSecs  = qMax(0LL, tsToSecs(endTs) - tsToSecs(sessionStartTs));
+        const qint64 activeSecs = qMax(0LL, totalSecs - sessionAfkSecs);
+
+        const QByteArray endTsBytes = endTs.toUtf8();
+        sqlite3_bind_text(sessionCloseStmt, 1, endTsBytes.constData(), endTsBytes.size(), SQLITE_STATIC);
+        sqlite3_bind_int64(sessionCloseStmt, 2, totalSecs);
+        sqlite3_bind_int64(sessionCloseStmt, 3, sessionAfkSecs);
+        sqlite3_bind_int64(sessionCloseStmt, 4, activeSecs);
+        if (sessionCharId < 0) sqlite3_bind_null  (sessionCloseStmt, 5);
+        else                   sqlite3_bind_int64 (sessionCloseStmt, 5, sessionCharId);
+        if (sessionAreaId < 0) sqlite3_bind_null  (sessionCloseStmt, 6);
+        else                   sqlite3_bind_int64 (sessionCloseStmt, 6, sessionAreaId);
+        sqlite3_bind_int64(sessionCloseStmt, 7, sessionId);
+        sqlite3_step(sessionCloseStmt);
+        sqlite3_reset(sessionCloseStmt);
+
+        sessionId      = -1;
+        sessionStartTs.clear();
+        sessionAfkSecs = 0;
+        sessionCharId  = -1;
+        sessionAreaId  = -1;
+    };
+
+    // ── main loop ────────────────────────────────────────────────────────────
+
     QString pendingCode;
     int     pendingLevel  = 0;
 
@@ -166,20 +336,49 @@ void LogIngestWorker::start()
         const auto hdr = lineRe.match(line);
         if (!hdr.hasMatch()) continue;
 
+        QString ts = hdr.captured(1);
+        ts[4] = '-'; ts[7] = '-';   // 2026/06/03 → 2026-06-03
+        const QByteArray tsBytes = ts.toUtf8();
+        const QString prevTs = lastTs;
+        lastTs = ts;
+
         const QString level   = hdr.captured(2);
         const QString message = hdr.captured(4).trimmed();
 
-        if (level == QLatin1String("DEBUG")) {
+        // ── session boundary ─────────────────────────────────────────────────
+        if (message.contains(QLatin1String("LOG FILE OPENING"))) {
+            closeSession(prevTs);
+
+            sqlite3_bind_int64(sessionInsertStmt, 1, m_installId);
+            sqlite3_bind_text (sessionInsertStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+            sqlite3_step(sessionInsertStmt);
+            sqlite3_reset(sessionInsertStmt);
+
+            sqlite3_bind_int64(sessionSelectStmt, 1, m_installId);
+            sqlite3_bind_text (sessionSelectStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+            sessionId = -1;
+            if (sqlite3_step(sessionSelectStmt) == SQLITE_ROW)
+                sessionId = sqlite3_column_int64(sessionSelectStmt, 0);
+            sqlite3_reset(sessionSelectStmt);
+
+            sessionStartTs = ts;
+            sessionAfkSecs = 0;
+            sessionCharId  = -1;
+            sessionAreaId  = -1;
+
+            // Session starts at char select — open a NULL-area span.
+            openSpan(ts, -1);
+
+        } else if (level == QLatin1String("DEBUG")) {
             const auto genM = generatingRe.match(message);
             if (genM.hasMatch()) {
                 pendingLevel = genM.captured(1).toInt();
                 pendingCode  = genM.captured(2);
             }
-        } else if (level == QLatin1String("INFO")) {
-            QString ts = hdr.captured(1);
-            ts[4] = '-'; ts[7] = '-';   // 2026/06/03 → 2026-06-03
-            const QByteArray tsBytes = ts.toUtf8();
 
+        } else if (level == QLatin1String("INFO")) {
+
+            // Guild
             const auto guildM = guildRe.match(message);
             if (guildM.hasMatch()) {
                 const QByteArray guildBytes = guildM.captured(1).toUtf8();
@@ -188,6 +387,7 @@ void LogIngestWorker::start()
                 sqlite3_reset(accountUpsertStmt);
             }
 
+            // Chat channel join
             const auto chanM = chatChannelRe.match(message);
             if (chanM.hasMatch()) {
                 const int num = chanM.captured(1).remove(QLatin1Char(',')).toInt();
@@ -220,6 +420,7 @@ void LogIngestWorker::start()
                 }
             }
 
+            // Character level-up
             const auto lvlM = levelUpRe.match(message);
             if (lvlM.hasMatch()) {
                 const QByteArray charNameBytes  = lvlM.captured(1).toUtf8();
@@ -236,30 +437,63 @@ void LogIngestWorker::start()
                     classId = sqlite3_column_int64(classSelectStmt, 0);
                 sqlite3_reset(classSelectStmt);
 
-                if (classId < 0) continue;
+                if (classId >= 0) {
+                    sqlite3_bind_text (charUpsertStmt, 1, charNameBytes.constData(), charNameBytes.size(), SQLITE_STATIC);
+                    sqlite3_bind_int64(charUpsertStmt, 2, classId);
+                    sqlite3_bind_int  (charUpsertStmt, 3, charLevel);
+                    sqlite3_step(charUpsertStmt);
+                    sqlite3_reset(charUpsertStmt);
 
-                sqlite3_bind_text (charUpsertStmt, 1, charNameBytes.constData(), charNameBytes.size(), SQLITE_STATIC);
-                sqlite3_bind_int64(charUpsertStmt, 2, classId);
-                sqlite3_bind_int  (charUpsertStmt, 3, charLevel);
-                sqlite3_step(charUpsertStmt);
-                sqlite3_reset(charUpsertStmt);
+                    sqlite3_bind_text(charSelectStmt, 1, charNameBytes.constData(), charNameBytes.size(), SQLITE_STATIC);
+                    qint64 charId = -1;
+                    if (sqlite3_step(charSelectStmt) == SQLITE_ROW)
+                        charId = sqlite3_column_int64(charSelectStmt, 0);
+                    sqlite3_reset(charSelectStmt);
 
-                sqlite3_bind_text(charSelectStmt, 1, charNameBytes.constData(), charNameBytes.size(), SQLITE_STATIC);
-                qint64 charId = -1;
-                if (sqlite3_step(charSelectStmt) == SQLITE_ROW)
-                    charId = sqlite3_column_int64(charSelectStmt, 0);
-                sqlite3_reset(charSelectStmt);
+                    if (charId >= 0) {
+                        sqlite3_bind_int64(levelEventStmt, 1, m_installId);
+                        sqlite3_bind_int64(levelEventStmt, 2, charId);
+                        sqlite3_bind_int  (levelEventStmt, 3, charLevel);
+                        sqlite3_bind_text (levelEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                        sqlite3_step(levelEventStmt);
+                        sqlite3_reset(levelEventStmt);
 
-                if (charId >= 0) {
-                    sqlite3_bind_int64(levelEventStmt, 1, m_installId);
-                    sqlite3_bind_int64(levelEventStmt, 2, charId);
-                    sqlite3_bind_int  (levelEventStmt, 3, charLevel);
-                    sqlite3_bind_text (levelEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
-                    sqlite3_step(levelEventStmt);
-                    sqlite3_reset(levelEventStmt);
+                        sessionCharId = charId;
+
+                        // Backfill char_id on the current open span now that we know it.
+                        if (currentSpanId >= 0) {
+                            sqlite3_bind_int64(spanUpdateCharStmt, 1, charId);
+                            sqlite3_bind_int64(spanUpdateCharStmt, 2, currentSpanId);
+                            sqlite3_step(spanUpdateCharStmt);
+                            sqlite3_reset(spanUpdateCharStmt);
+                        }
+                    }
                 }
             }
 
+            // AFK toggle
+            const auto afkM = afkRe.match(message);
+            if (afkM.hasMatch()) {
+                if (afkM.captured(1) == QLatin1String("ON")) {
+                    afkOnTs = ts;
+                } else if (!afkOnTs.isEmpty()) {
+                    const qint64 afkDur = qMax(0LL, tsToSecs(ts) - tsToSecs(afkOnTs));
+                    sessionAfkSecs     += afkDur;
+                    currentSpanAfkSecs += afkDur;
+
+                    const QByteArray onBytes = afkOnTs.toUtf8();
+                    if (sessionId >= 0) {
+                        sqlite3_bind_int64(afkStmt, 1, sessionId);
+                        sqlite3_bind_text (afkStmt, 2, onBytes.constData(),  onBytes.size(),  SQLITE_STATIC);
+                        sqlite3_bind_text (afkStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                        sqlite3_step(afkStmt);
+                        sqlite3_reset(afkStmt);
+                    }
+                    afkOnTs.clear();
+                }
+            }
+
+            // Area entered (correlated with pending Generating line)
             if (!pendingCode.isEmpty()) {
                 const auto entM = enteredRe.match(message);
                 if (entM.hasMatch()) {
@@ -286,6 +520,11 @@ void LogIngestWorker::start()
                         sqlite3_reset(moveInsertStmt);
                         ++totalVisits;
                         safeCommitPos = lineStartPos;
+                        sessionAreaId = areaId;
+
+                        // Close the previous span (char select or prior area) and open one for this area.
+                        closeSpan(ts);
+                        openSpan(ts, areaId);
                     }
 
                     pendingCode.clear();
@@ -304,6 +543,7 @@ void LogIngestWorker::start()
         }
     }
 
+    closeSession(lastTs);
     flushSource(file.pos());
     execSql(db, "COMMIT;");
 
@@ -319,6 +559,14 @@ void LogIngestWorker::start()
     sqlite3_finalize(charUpsertStmt);
     sqlite3_finalize(charSelectStmt);
     sqlite3_finalize(levelEventStmt);
+    sqlite3_finalize(sessionInsertStmt);
+    sqlite3_finalize(sessionSelectStmt);
+    sqlite3_finalize(sessionCloseStmt);
+    sqlite3_finalize(afkStmt);
+    sqlite3_finalize(spanInsertStmt);
+    sqlite3_finalize(spanSelectStmt);
+    sqlite3_finalize(spanCloseStmt);
+    sqlite3_finalize(spanUpdateCharStmt);
     sqlite3_finalize(sourceStmt);
     sqlite3_close(db);
 

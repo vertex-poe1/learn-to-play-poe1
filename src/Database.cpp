@@ -149,6 +149,50 @@ void Database::initSchema()
         );
     )");
 
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS sessions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            install_id  INTEGER NOT NULL REFERENCES installs(id),
+            started_at  TEXT    NOT NULL,
+            ended_at    TEXT,
+            total_secs  INTEGER,
+            active_secs INTEGER,
+            afk_secs    INTEGER,
+            account_id  INTEGER REFERENCES accounts(id),
+            char_id     INTEGER REFERENCES characters(id),
+            area_id     INTEGER REFERENCES areas(id),
+            UNIQUE(install_id, started_at)
+        );
+    )");
+
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS session_afk (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL REFERENCES sessions(id),
+            afk_on_at  TEXT    NOT NULL,
+            afk_off_at TEXT,
+            UNIQUE(session_id, afk_on_at)
+        );
+    )");
+
+    // One row per contiguous period spent in a single area (area_id NULL = character select).
+    // char_id is the most recently seen character at the time the span opened, updated on
+    // level-up while the span is open.  Duration is computed in SQL on close so we never
+    // have to carry entered_at in memory.
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS area_time_spans (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id    INTEGER NOT NULL REFERENCES sessions(id),
+            area_id       INTEGER REFERENCES areas(id),
+            char_id       INTEGER REFERENCES characters(id),
+            entered_at    TEXT    NOT NULL,
+            exited_at     TEXT,
+            duration_secs INTEGER,
+            afk_secs      INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(session_id, entered_at)
+        );
+    )");
+
     const int version = readUserVersion(m_db);
     if (version == 0)
         setUserVersion(m_db, kDbVersion);
