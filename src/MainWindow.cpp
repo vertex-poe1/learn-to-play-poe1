@@ -181,7 +181,11 @@ void MainWindow::onPollTimer()
         m_gameFound = state.found;
         refreshStatusBar();
         if (state.found)
-            log(QStringLiteral("Game started (%1).").arg(state.executableName));
+            log("Game is running", "game",
+                QStringLiteral("{%1} with PID {%2} at {%3}")
+                    .arg(state.executableName)
+                    .arg(state.pid)
+                    .arg(state.installDir));
         else
             log(QStringLiteral("Game closed (%1).").arg(m_lastGamePid));
     }
