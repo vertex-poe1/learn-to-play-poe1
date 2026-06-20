@@ -22,6 +22,9 @@
 #include <QSystemTrayIcon>
 #include <QTime>
 #include <QTimer>
+#include "NavBar.h"
+
+#include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -37,12 +40,30 @@ MainWindow::MainWindow(QWidget *parent)
     m_log = new NotificationsPanel(this);
     m_taskPanel = new TaskPanel(m_taskManager, this);
 
+    auto *currentPage = new QWidget(this);
+    auto *currentLayout = new QVBoxLayout(currentPage);
+    currentLayout->setContentsMargins(0, 0, 0, 0);
+    currentLayout->setSpacing(0);
+    currentLayout->addWidget(m_log, 1);
+    currentLayout->addWidget(m_taskPanel, 0);
+
+    m_stack = new QStackedWidget(this);
+    m_stack->addWidget(new QWidget()); // Past
+    m_stack->addWidget(currentPage);   // Current
+    m_stack->addWidget(new QWidget()); // Chats
+    m_stack->addWidget(new QWidget()); // DMs
+
+    m_navBar = new NavBar({"Past", "Current", "Chats", "DMs"}, this);
+    m_navBar->setCurrentIndex(1);
+    m_stack->setCurrentIndex(1);
+    connect(m_navBar, &NavBar::currentChanged, m_stack, &QStackedWidget::setCurrentIndex);
+
     auto *container = new QWidget(this);
     auto *vbox = new QVBoxLayout(container);
     vbox->setContentsMargins(0, 0, 0, 0);
     vbox->setSpacing(0);
-    vbox->addWidget(m_log, 1);
-    vbox->addWidget(m_taskPanel, 0);
+    vbox->addWidget(m_navBar);
+    vbox->addWidget(m_stack, 1);
     setCentralWidget(container);
 
     m_config = AppConfig::load();

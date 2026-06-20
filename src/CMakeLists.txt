@@ -30,6 +30,8 @@ qt_add_executable(l2p-poe1
     LogIngestWorker.h
     MainWindow.cpp
     MainWindow.h
+    NavBar.cpp
+    NavBar.h
     NotificationWidget.cpp
     NotificationWidget.h
     NotificationsPanel.cpp

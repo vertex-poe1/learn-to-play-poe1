@@ -10,8 +10,10 @@
 
 class QAction;
 class QLabel;
+class QStackedWidget;
 
 class QMenu;
+class NavBar;
 class QTimer;
 class Database;
 class GameOverlay;
@@ -64,6 +66,8 @@ private:
     NotificationsPanel *m_log{};
     TaskManager        *m_taskManager{};
     TaskPanel          *m_taskPanel{};
+    NavBar             *m_navBar{};
+    QStackedWidget     *m_stack{};
     QSystemTrayIcon    *m_tray{};
     QMenu              *m_trayMenu{};
     SettingsDialog     *m_settingsDialog{};
