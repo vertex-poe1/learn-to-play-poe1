@@ -170,6 +170,10 @@ void LogIngestWorker::start()
     static const QRegularExpression triggerFollowupRe(
         R"([\w ]+[=:] ?\d+)"
     );
+    // [INFO] Failed to create ruleset 130 (PlayerHarbingerRules)
+    static const QRegularExpression rulesetFailedRe(
+        R"(Failed to create ruleset \d+ \(([^)]+)\))"
+    );
 
     // ── prepared statements ──────────────────────────────────────────────────
 
@@ -223,6 +227,8 @@ void LogIngestWorker::start()
     sqlite3_stmt *passQuestUpsertStmt    = nullptr;
     sqlite3_stmt *passQuestSelectStmt    = nullptr;
     sqlite3_stmt *passSnapQuestStmt      = nullptr;
+    sqlite3_stmt *rulesetFailedStmt    = nullptr;
+    sqlite3_stmt *generalEventStmt     = nullptr;
     sqlite3_stmt *sourceStmt           = nullptr;
 
     sqlite3_prepare_v2(db,
@@ -397,6 +403,12 @@ void LogIngestWorker::start()
     sqlite3_prepare_v2(db,
         "UPDATE pvp_queue_events SET cancelled_at=? WHERE id=?;",
         -1, &pvpQueueCancelStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO zone_ruleset_failed_events(session_id, area_id, ruleset_name, occurred_at) VALUES(?,?,?,?);",
+        -1, &rulesetFailedStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO general_events(session_id, area_id, event_type, occurred_at) VALUES(?,?,?,?);",
+        -1, &generalEventStmt, nullptr);
     sqlite3_prepare_v2(db,
         "UPDATE installs SET "
         "file_created_at=?, file_modified_at=?, file_size=?, last_byte_offset=? "
@@ -911,6 +923,61 @@ void LogIngestWorker::start()
                 sqlite3_reset(questEventStmt);
             }
 
+            if (sessionId >= 0 && message.contains(QLatin1String("There has been a patch that you need to update to."))) {
+                sqlite3_bind_int64(generalEventStmt, 1, sessionId);
+                if (sessionAreaId < 0) sqlite3_bind_null (generalEventStmt, 2);
+                else                   sqlite3_bind_int64(generalEventStmt, 2, sessionAreaId);
+                sqlite3_bind_text (generalEventStmt, 3, "patch_required", -1, SQLITE_STATIC);
+                sqlite3_bind_text (generalEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sqlite3_step(generalEventStmt);
+                sqlite3_reset(generalEventStmt);
+            }
+
+            if (sessionId >= 0 && message.contains(QLatin1String("Not logged in to steam. Achievements will not work"))) {
+                static const QByteArray kSteamNotLoggedIn("steam_not_logged_in");
+                sqlite3_bind_text(achievUpsertStmt, 1, kSteamNotLoggedIn.constData(), kSteamNotLoggedIn.size(), SQLITE_STATIC);
+                sqlite3_step(achievUpsertStmt);
+                sqlite3_reset(achievUpsertStmt);
+
+                sqlite3_bind_text(achievSelectStmt, 1, kSteamNotLoggedIn.constData(), kSteamNotLoggedIn.size(), SQLITE_STATIC);
+                qint64 achievId = -1;
+                if (sqlite3_step(achievSelectStmt) == SQLITE_ROW)
+                    achievId = sqlite3_column_int64(achievSelectStmt, 0);
+                sqlite3_reset(achievSelectStmt);
+
+                if (achievId >= 0) {
+                    sqlite3_bind_int64(achievEventStmt, 1, sessionId);
+                    sqlite3_bind_int64(achievEventStmt, 2, achievId);
+                    sqlite3_bind_text (achievEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                    sqlite3_step(achievEventStmt);
+                    sqlite3_reset(achievEventStmt);
+                }
+            }
+
+            if (sessionId >= 0 && message.contains(QLatin1String("InstanceClientLabyrinthCraftResultOptionsList recieved"))) {
+                sqlite3_bind_int64(questEventStmt, 1, sessionId);
+                if (sessionAreaId < 0) sqlite3_bind_null (questEventStmt, 2);
+                else                   sqlite3_bind_int64(questEventStmt, 2, sessionAreaId);
+                sqlite3_bind_text (questEventStmt, 3, "labyrinth_craft_options_received", -1, SQLITE_STATIC);
+                sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sqlite3_step(questEventStmt);
+                sqlite3_reset(questEventStmt);
+            }
+
+            if (sessionId >= 0) {
+                const auto rulesetM = rulesetFailedRe.match(message);
+                if (rulesetM.hasMatch()) {
+                    const QByteArray nameBytes = rulesetM.captured(1).toUtf8();
+                    sqlite3_bind_int64(rulesetFailedStmt, 1, sessionId);
+                    if (sessionAreaId < 0) sqlite3_bind_null (rulesetFailedStmt, 2);
+                    else                   sqlite3_bind_int64(rulesetFailedStmt, 2, sessionAreaId);
+                    sqlite3_bind_text (rulesetFailedStmt, 3, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
+                    sqlite3_bind_text (rulesetFailedStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                    sqlite3_step(rulesetFailedStmt);
+                    sqlite3_reset(rulesetFailedStmt);
+                }
+            }
+
             // /played command — total in-game time on the current character
             if (playedRe.match(message).hasMatch() && sessionId >= 0) {
                 qint64 playedSecs = 0;
@@ -1305,6 +1372,8 @@ void LogIngestWorker::start()
     sqlite3_finalize(passQuestUpsertStmt);
     sqlite3_finalize(passQuestSelectStmt);
     sqlite3_finalize(passSnapQuestStmt);
+    sqlite3_finalize(rulesetFailedStmt);
+    sqlite3_finalize(generalEventStmt);
     sqlite3_finalize(sourceStmt);
     sqlite3_close(db);
 

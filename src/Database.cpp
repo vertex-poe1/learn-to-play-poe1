@@ -3,7 +3,7 @@
 #include <sqlite3.h>
 #include <cstdio>
 
-static constexpr int kDbVersion = 15;
+static constexpr int kDbVersion = 17;
 
 static void execSql(sqlite3 *db, const char *sql)
 {
@@ -365,6 +365,17 @@ void Database::initSchema()
         );
     )");
 
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS zone_ruleset_failed_events (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id   INTEGER NOT NULL REFERENCES sessions(id),
+            area_id      INTEGER REFERENCES areas(id),
+            ruleset_name TEXT    NOT NULL,
+            occurred_at  TEXT    NOT NULL,
+            UNIQUE(session_id, ruleset_name, occurred_at)
+        );
+    )");
+
     // channel stores the raw prefix character: '#' global, '$' trade, '%' party, '&' guild.
     execSql(m_db, R"(
         CREATE TABLE IF NOT EXISTS chats (
@@ -376,6 +387,17 @@ void Database::initSchema()
             message        TEXT    NOT NULL,
             occurred_at    TEXT    NOT NULL,
             UNIQUE(session_id, occurred_at, public_char_id, channel)
+        );
+    )");
+
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS general_events (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  INTEGER NOT NULL REFERENCES sessions(id),
+            area_id     INTEGER REFERENCES areas(id),
+            event_type  TEXT    NOT NULL,
+            occurred_at TEXT    NOT NULL,
+            UNIQUE(session_id, occurred_at, event_type)
         );
     )");
 
@@ -397,7 +419,9 @@ void Database::migrate(int fromVersion)
     // v11→v12: pvp_matches + pvp_queue_events;
     // v12→v13: pvp_queue_events.cancelled_at;
     // v13→v14: chats.guild_tag;
-    // v14→v15: guild_members.
+    // v14→v15: guild_members;
+    // v15→v16: zone_ruleset_failed_events;
+    // v16→v17: general_events.
     if (fromVersion < 5) {
         execSql(m_db, "ALTER TABLE passive_skills ADD COLUMN is_mastery INTEGER NOT NULL DEFAULT 0;");
         execSql(m_db, "ALTER TABLE passive_skill_allocations ADD COLUMN action TEXT NOT NULL DEFAULT 'allocated';");
@@ -545,6 +569,30 @@ void Database::migrate(int fromVersion)
                 guild_name TEXT    NOT NULL,
                 account_id INTEGER NOT NULL REFERENCES accounts(id),
                 UNIQUE(guild_name, account_id)
+            );
+        )");
+    }
+    if (fromVersion < 16) {
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS zone_ruleset_failed_events (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id   INTEGER NOT NULL REFERENCES sessions(id),
+                area_id      INTEGER REFERENCES areas(id),
+                ruleset_name TEXT    NOT NULL,
+                occurred_at  TEXT    NOT NULL,
+                UNIQUE(session_id, ruleset_name, occurred_at)
+            );
+        )");
+    }
+    if (fromVersion < 17) {
+        execSql(m_db, R"(
+            CREATE TABLE IF NOT EXISTS general_events (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  INTEGER NOT NULL REFERENCES sessions(id),
+                area_id     INTEGER REFERENCES areas(id),
+                event_type  TEXT    NOT NULL,
+                occurred_at TEXT    NOT NULL,
+                UNIQUE(session_id, occurred_at, event_type)
             );
         )");
     }
