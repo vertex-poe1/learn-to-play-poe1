@@ -180,9 +180,28 @@ void MainWindow::onPollTimer()
         && !m_config.installDirs.contains(state.installDir)) {
         m_config.installDirs << state.installDir;
         m_config.save();
-        if (m_db && m_db->isOpen())
-            maybeIngestClientLog(state.installDir);
         log(QStringLiteral("Install directory auto-detected: %1").arg(state.installDir));
+        // The live-ingest block below will start watching since the game is running;
+        // nothing extra needed here for newly discovered dirs.
+    }
+
+    if (m_db && m_db->isOpen()) {
+        if (m_gameFound && !m_liveWorker) {
+            // Game is running but we have no live tail — start one.
+            // Prefer the exact dir reported by the tracker; fall back to configured dirs.
+            const QStringList candidates = !state.installDir.isEmpty()
+                ? QStringList{state.installDir}
+                : m_config.installDirs;
+            for (const QString &dir : candidates) {
+                if (QFileInfo::exists(dir + "/logs/Client.txt")) {
+                    startLiveIngest(dir);
+                    break;
+                }
+            }
+        } else if (!m_gameFound && m_liveWorker) {
+            // Game closed — drain any remaining log content then stop.
+            stopLiveIngest();
+        }
     }
 }
 
@@ -280,36 +299,60 @@ void MainWindow::refreshStatusBar()
     }
 }
 
-void MainWindow::maybeIngestClientLog(const QString &installDir)
+void MainWindow::maybeIngestClientLog(const QString &installDir, bool liveMode)
 {
     const QString logPath = installDir + "/logs/Client.txt";
     if (!QFileInfo::exists(logPath))
         return;
 
-    // Guard against submitting a duplicate task for a still-active ingest.
-    // mtime+size covers the across-restart case; this covers the same-session
-    // window before the first chunk commits and log_sources is written.
     const QString taskName = QStringLiteral("Ingest %1").arg(logPath);
     for (const TaskRecord &t : m_taskManager->tasks()) {
         if (t.name == taskName
-            && (t.status == TaskStatus::Pending || t.status == TaskStatus::Running))
-            return;
+                && (t.status == TaskStatus::Pending || t.status == TaskStatus::Running)) {
+            if (liveMode) {
+                // Cancel the existing batch worker so live mode can take over
+                // from its last committed offset.
+                m_taskManager->cancel(t.id);
+            } else {
+                return;  // batch already running, don't duplicate
+            }
+            break;
+        }
     }
 
     const Database::InstallState inst = m_db->upsertInstall(installDir);
     if (inst.id < 0)
         return;
 
-    const QFileInfo fi(logPath);
-    const bool alreadyIngested = inst.fileModifiedAt > 0
-        && inst.fileModifiedAt == fi.lastModified().toSecsSinceEpoch()
-        && inst.fileSize       == fi.size();
-    if (alreadyIngested)
-        return;
+    // Skip unchanged files in batch mode only — in live mode we always watch.
+    if (!liveMode) {
+        const QFileInfo fi(logPath);
+        const bool alreadyIngested = inst.fileModifiedAt > 0
+            && inst.fileModifiedAt == fi.lastModified().toSecsSinceEpoch()
+            && inst.fileSize       == fi.size();
+        if (alreadyIngested)
+            return;
+    }
 
     const qint64 resumeOffset = inst.lastByteOffset;
 
     auto *worker = new LogIngestWorker(
-        m_db->path(), inst.id, logPath, resumeOffset, m_config.channelNames);
+        m_db->path(), inst.id, logPath, resumeOffset, m_config.channelNames, liveMode);
     m_taskManager->submit(taskName, TaskKind::DbWrite, worker);
+
+    if (liveMode)
+        m_liveWorker = worker;
+}
+
+void MainWindow::startLiveIngest(const QString &installDir)
+{
+    maybeIngestClientLog(installDir, /*liveMode=*/true);
+}
+
+void MainWindow::stopLiveIngest()
+{
+    if (m_liveWorker) {
+        m_liveWorker->finalize();
+        m_liveWorker = nullptr;
+    }
 }

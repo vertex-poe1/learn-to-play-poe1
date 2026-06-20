@@ -4,6 +4,7 @@
 #include "NotificationsPanel.h"
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QRect>
 #include <QSystemTrayIcon>
 
@@ -14,6 +15,7 @@ class QMenu;
 class QTimer;
 class Database;
 class GameOverlay;
+class LogIngestWorker;
 class SettingsDialog;
 class TaskManager;
 class TaskPanel;
@@ -48,7 +50,9 @@ private:
     void setupTray();
     void setupMenuBar();
     void scheduleLogIngestion();
-    void maybeIngestClientLog(const QString &installDir);
+    void maybeIngestClientLog(const QString &installDir, bool liveMode = false);
+    void startLiveIngest(const QString &installDir);
+    void stopLiveIngest();
     void setStatusContent(const QString &content);
     void refreshStatusBar();
 
@@ -73,4 +77,6 @@ private:
     QRect            m_lastGameRect;
     QString          m_lastGameExeName;
     quint32          m_lastGamePid{};
+
+    QPointer<LogIngestWorker> m_liveWorker;
 };

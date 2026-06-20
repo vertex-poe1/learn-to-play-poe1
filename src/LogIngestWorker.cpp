@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QThread>
 #include <sqlite3.h>
 
 static void execSql(sqlite3 *db, const char *sql)
@@ -16,6 +17,7 @@ static void execSql(sqlite3 *db, const char *sql)
 LogIngestWorker::LogIngestWorker(const QString &dbPath, qint64 installId,
                                  const QString &logPath, qint64 resumeOffset,
                                  const QHash<int, QString> &channelNames,
+                                 bool liveMode,
                                  QObject *parent)
     : BackgroundWorker(parent)
     , m_dbPath(dbPath)
@@ -23,6 +25,7 @@ LogIngestWorker::LogIngestWorker(const QString &dbPath, qint64 installId,
     , m_logPath(logPath)
     , m_resumeOffset(resumeOffset)
     , m_channelNames(channelNames)
+    , m_liveMode(liveMode)
 {}
 
 void LogIngestWorker::start()
@@ -625,7 +628,22 @@ void LogIngestWorker::start()
 
     execSql(db, "BEGIN;");
 
-    while (!file.atEnd() && !isCancelled()) {
+    while (!isCancelled()) {
+        if (file.atEnd()) {
+            if (!m_liveMode.load(std::memory_order_relaxed)) break;
+
+            // Commit what we have so new events are visible to the UI immediately,
+            // then sleep before polling for more content.
+            if (chunkCount > 0) {
+                flushSource(file.pos());
+                execSql(db, "COMMIT;");
+                chunkCount = 0;
+                execSql(db, "BEGIN;");
+            }
+            QThread::msleep(250);
+            continue;
+        }
+
         const qint64  lineStartPos = file.pos();
         const QString line         = QString::fromUtf8(file.readLine()).trimmed();
 
