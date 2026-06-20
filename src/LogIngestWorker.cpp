@@ -237,6 +237,7 @@ void LogIngestWorker::start()
     sqlite3_stmt *rulesetFailedStmt    = nullptr;
     sqlite3_stmt *generalEventStmt     = nullptr;
     sqlite3_stmt *sourceStmt           = nullptr;
+    sqlite3_stmt *eventInsertStmt      = nullptr;
 
     sqlite3_prepare_v2(db,
         "INSERT INTO areas(code, level, display_name) VALUES(?,?,?) "
@@ -421,8 +422,23 @@ void LogIngestWorker::start()
         "file_created_at=?, file_modified_at=?, file_size=?, last_byte_offset=? "
         "WHERE id=?;",
         -1, &sourceStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO events(occurred_at, event_type, source_id) VALUES(?,?,?);",
+        -1, &eventInsertStmt, nullptr);
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    // Call immediately after sqlite3_step(someEventStmt) — before any other step —
+    // so sqlite3_changes and sqlite3_last_insert_rowid still reflect that insert.
+    auto insertEvent = [&](const QByteArray &tsBytes, const char *eventType) {
+        if (sqlite3_changes(db) == 0) return;
+        const qint64 sourceId = sqlite3_last_insert_rowid(db);
+        sqlite3_bind_text (eventInsertStmt, 1, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+        sqlite3_bind_text (eventInsertStmt, 2, eventType, -1, SQLITE_STATIC);
+        sqlite3_bind_int64(eventInsertStmt, 3, sourceId);
+        sqlite3_step(eventInsertStmt);
+        sqlite3_reset(eventInsertStmt);
+    };
 
     auto flushSource = [&](qint64 offset) {
         sqlite3_bind_int64(sourceStmt, 1, fileCreatedAt);
@@ -852,6 +868,7 @@ void LogIngestWorker::start()
                         sqlite3_bind_int  (levelEventStmt, 3, charLevel);
                         sqlite3_bind_text (levelEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                         sqlite3_step(levelEventStmt);
+                        insertEvent(tsBytes, "level_up");
                         sqlite3_reset(levelEventStmt);
 
                         if (m_liveMode.load(std::memory_order_relaxed))
@@ -916,6 +933,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 3, "monsters_cleared", -1, SQLITE_STATIC);
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
+                insertEvent(tsBytes, "quest");
                 sqlite3_reset(questEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::QuestEvent, ts, {{"event_type", "monsters_cleared"}}});
@@ -928,6 +946,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 3, "passive_skill_point_received", -1, SQLITE_STATIC);
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
+                insertEvent(tsBytes, "quest");
                 sqlite3_reset(questEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::QuestEvent, ts, {{"event_type", "passive_skill_point_received"}}});
@@ -940,6 +959,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 3, "passive_skill_points_received", -1, SQLITE_STATIC);
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
+                insertEvent(tsBytes, "quest");
                 sqlite3_reset(questEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::QuestEvent, ts, {{"event_type", "passive_skill_points_received"}}});
@@ -952,6 +972,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 3, "passive_respec_received", -1, SQLITE_STATIC);
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
+                insertEvent(tsBytes, "quest");
                 sqlite3_reset(questEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::QuestEvent, ts, {{"event_type", "passive_respec_received"}}});
@@ -965,6 +986,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 3, "kitava_resistance_penalty", -1, SQLITE_STATIC);
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
+                insertEvent(tsBytes, "quest");
                 sqlite3_reset(questEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::QuestEvent, ts, {{"event_type", "kitava_resistance_penalty"}}});
@@ -977,6 +999,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (generalEventStmt, 3, "patch_required", -1, SQLITE_STATIC);
                 sqlite3_bind_text (generalEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(generalEventStmt);
+                insertEvent(tsBytes, "general");
                 sqlite3_reset(generalEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::GeneralEvent, ts, {{"event_type", "patch_required"}}});
@@ -999,6 +1022,7 @@ void LogIngestWorker::start()
                     sqlite3_bind_int64(achievEventStmt, 2, achievId);
                     sqlite3_bind_text (achievEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(achievEventStmt);
+                    insertEvent(tsBytes, "achievement");
                     sqlite3_reset(achievEventStmt);
                 }
             }
@@ -1010,6 +1034,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (questEventStmt, 3, "labyrinth_craft_options_received", -1, SQLITE_STATIC);
                 sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                 sqlite3_step(questEventStmt);
+                insertEvent(tsBytes, "quest");
                 sqlite3_reset(questEventStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::QuestEvent, ts, {{"event_type", "labyrinth_craft_options_received"}}});
@@ -1025,6 +1050,7 @@ void LogIngestWorker::start()
                     sqlite3_bind_text (rulesetFailedStmt, 3, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
                     sqlite3_bind_text (rulesetFailedStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(rulesetFailedStmt);
+                    insertEvent(tsBytes, "ruleset_failed");
                     sqlite3_reset(rulesetFailedStmt);
                 }
             }
@@ -1039,6 +1065,7 @@ void LogIngestWorker::start()
                     sqlite3_bind_text (questEventStmt, 3, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
                     sqlite3_bind_text (questEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(questEventStmt);
+                    insertEvent(tsBytes, "quest");
                     sqlite3_reset(questEventStmt);
                 }
             }
@@ -1093,6 +1120,7 @@ void LogIngestWorker::start()
                     sqlite3_bind_int64(achievEventStmt, 2, achievId);
                     sqlite3_bind_text (achievEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(achievEventStmt);
+                    insertEvent(tsBytes, "achievement");
                     sqlite3_reset(achievEventStmt);
                     if (m_liveMode.load(std::memory_order_relaxed))
                         emit liveEventParsed(LiveEvent{LiveEventType::Achievement, ts, {{"name", achievM.captured(1)}}});
@@ -1121,6 +1149,7 @@ void LogIngestWorker::start()
                     else                   sqlite3_bind_int64(hideoutEventStmt, 3, sessionAreaId);
                     sqlite3_bind_text (hideoutEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(hideoutEventStmt);
+                    insertEvent(tsBytes, "hideout");
                     sqlite3_reset(hideoutEventStmt);
                     if (m_liveMode.load(std::memory_order_relaxed))
                         emit liveEventParsed(LiveEvent{LiveEventType::HideoutDiscovered, ts, {{"name", hideoutM.captured(1).trimmed()}}});
@@ -1149,9 +1178,10 @@ void LogIngestWorker::start()
                     sqlite3_bind_int  (pvpQueueEventStmt, 3, playerCount);
                     sqlite3_bind_text (pvpQueueEventStmt, 4, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(pvpQueueEventStmt);
-                    sqlite3_reset(pvpQueueEventStmt);
                     if (sqlite3_changes(db) > 0)
                         lastPvpQueueEventId = sqlite3_last_insert_rowid(db);
+                    insertEvent(tsBytes, "pvp_queue");
+                    sqlite3_reset(pvpQueueEventStmt);
                     if (m_liveMode.load(std::memory_order_relaxed))
                         emit liveEventParsed(LiveEvent{LiveEventType::PvpQueue, ts, {
                             {"match_name",   pvpM.captured(1)},
@@ -1198,6 +1228,7 @@ void LogIngestWorker::start()
                     sqlite3_bind_text (passiveAllocStmt, 4, actionBytes.constData(), actionBytes.size(), SQLITE_STATIC);
                     sqlite3_bind_text (passiveAllocStmt, 5, tsBytes.constData(),     tsBytes.size(),     SQLITE_STATIC);
                     sqlite3_step(passiveAllocStmt);
+                    insertEvent(tsBytes, "passive_alloc");
                     sqlite3_reset(passiveAllocStmt);
                     if (m_liveMode.load(std::memory_order_relaxed)) {
                         const bool alloc = (passiveM.captured(1).toLower() == QLatin1String("allocated"));
@@ -1237,6 +1268,7 @@ void LogIngestWorker::start()
                     sqlite3_bind_text (passiveAllocStmt, 4, actionBytes.constData(), actionBytes.size(), SQLITE_STATIC);
                     sqlite3_bind_text (passiveAllocStmt, 5, tsBytes.constData(),     tsBytes.size(),     SQLITE_STATIC);
                     sqlite3_step(passiveAllocStmt);
+                    insertEvent(tsBytes, "passive_alloc");
                     sqlite3_reset(passiveAllocStmt);
                     if (m_liveMode.load(std::memory_order_relaxed)) {
                         const bool alloc = (masteryM.captured(1).toLower() == QLatin1String("allocated"));
@@ -1262,6 +1294,7 @@ void LogIngestWorker::start()
                 sqlite3_bind_text (whisperStmt, 4, msgBytes.constData(),  msgBytes.size(),  SQLITE_STATIC);
                 sqlite3_bind_text (whisperStmt, 5, tsBytes.constData(),   tsBytes.size(),   SQLITE_STATIC);
                 sqlite3_step(whisperStmt);
+                insertEvent(tsBytes, "whisper");
                 sqlite3_reset(whisperStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::Whisper, ts, {
@@ -1293,6 +1326,7 @@ void LogIngestWorker::start()
                         sqlite3_bind_null(deathStmt, 4);
                     sqlite3_bind_text(deathStmt, 5, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                     sqlite3_step(deathStmt);
+                    insertEvent(tsBytes, "death");
                     sqlite3_reset(deathStmt);
                     if (m_liveMode.load(std::memory_order_relaxed))
                         emit liveEventParsed(LiveEvent{LiveEventType::CharacterDeath, ts, {{"character", deathM.captured(1)}}});
@@ -1498,6 +1532,7 @@ void LogIngestWorker::start()
     sqlite3_finalize(rulesetFailedStmt);
     sqlite3_finalize(generalEventStmt);
     sqlite3_finalize(sourceStmt);
+    sqlite3_finalize(eventInsertStmt);
     sqlite3_close(db);
 
     emit progress(100, QStringLiteral("%1 area visits").arg(totalVisits));

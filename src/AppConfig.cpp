@@ -10,10 +10,12 @@
 
 QString AppConfig::configPath()
 {
-    // Dev workflow: prefer TOML in the current working directory (e.g. project root when running `just run`)
-    const QString cwdPath = QDir::currentPath() + "/l2p-poe1.toml";
-    if (QFile::exists(cwdPath))
-        return cwdPath;
+    // If the CWD contains a Justfile it's the project root (e.g. `just run` or an IDE
+    // run with CWD set to the repo).  Prefer it so the TOML and DB land there instead
+    // of deep inside the build tree, making dev ergonomics nicer.
+    const QString cwd = QDir::currentPath();
+    if (QFile::exists(cwd + "/Justfile"))
+        return cwd + "/l2p-poe1.toml";
 
     return QCoreApplication::applicationDirPath() + "/l2p-poe1.toml";
 }

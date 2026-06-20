@@ -10,6 +10,10 @@ qt_add_executable(l2p-poe1
     BackgroundWorker.h
     Database.cpp
     Database.h
+    DatabaseHealth.cpp
+    DatabaseHealth.h
+    DatabaseHealthWorker.cpp
+    DatabaseHealthWorker.h
     GameOverlay.cpp
     GameOverlay.h
     ListEditor.cpp

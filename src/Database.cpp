@@ -58,6 +58,7 @@ void Database::applyPragmas()
     execSql(m_db, "PRAGMA cache_size=-65536;");
 }
 
+// Keep docs/schema.md in sync with any changes made here.
 void Database::initSchema()
 {
     execSql(m_db, R"(
@@ -399,6 +400,33 @@ void Database::initSchema()
             occurred_at TEXT    NOT NULL,
             UNIQUE(session_id, occurred_at, event_type)
         );
+    )");
+
+    // Operational metadata: arbitrary key→value pairs for the app's own bookkeeping
+    // (maintenance timestamps, etc.). Not user configuration; not game data.
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS app_state (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+    )");
+
+    // Chronological spine for the historical events panel. One row per event regardless
+    // of type; source_id is the rowid in the type-specific table. Indexed on occurred_at
+    // so paginated queries never scan the full union of event tables.
+    // UNIQUE(event_type, source_id) makes INSERT OR IGNORE safe on re-ingest.
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS events (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            occurred_at TEXT    NOT NULL,
+            event_type  TEXT    NOT NULL,
+            source_id   INTEGER NOT NULL,
+            UNIQUE(event_type, source_id)
+        );
+    )");
+
+    execSql(m_db, R"(
+        CREATE INDEX IF NOT EXISTS idx_events_by_time ON events (occurred_at DESC);
     )");
 
     const int version = readUserVersion(m_db);
