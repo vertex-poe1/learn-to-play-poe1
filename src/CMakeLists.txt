@@ -28,6 +28,8 @@ qt_add_executable(l2p-poe1
     LiveEventRuleEngine.h
     LogIngestWorker.cpp
     LogIngestWorker.h
+    DmPage.cpp
+    DmPage.h
     MainWindow.cpp
     MainWindow.h
     NavBar.cpp

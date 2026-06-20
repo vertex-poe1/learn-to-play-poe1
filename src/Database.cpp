@@ -436,6 +436,57 @@ void Database::initSchema()
         migrate(version);
 }
 
+QList<Database::WhisperRecord> Database::fetchWhispers(const QString &playerFilter) const
+{
+    if (!m_db) return {};
+
+    sqlite3_stmt *stmt = nullptr;
+    QByteArray nameBytes;
+
+    if (playerFilter.isEmpty()) {
+        sqlite3_prepare_v2(m_db,
+            "SELECT direction, player_name, message, occurred_at "
+            "FROM whispers ORDER BY occurred_at ASC;",
+            -1, &stmt, nullptr);
+    } else {
+        nameBytes = playerFilter.toUtf8();
+        sqlite3_prepare_v2(m_db,
+            "SELECT direction, player_name, message, occurred_at "
+            "FROM whispers WHERE player_name = ? ORDER BY occurred_at ASC;",
+            -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
+    }
+
+    QList<WhisperRecord> result;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        WhisperRecord r;
+        r.direction  = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)));
+        r.playerName = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)));
+        r.message    = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
+        r.occurredAt = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        result.append(r);
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+QStringList Database::fetchWhisperPartners() const
+{
+    if (!m_db) return {};
+
+    sqlite3_stmt *stmt = nullptr;
+    sqlite3_prepare_v2(m_db,
+        "SELECT player_name FROM whispers "
+        "GROUP BY player_name ORDER BY MAX(occurred_at) DESC;",
+        -1, &stmt, nullptr);
+
+    QStringList result;
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+        result << QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)));
+    sqlite3_finalize(stmt);
+    return result;
+}
+
 void Database::migrate(int fromVersion)
 {
     // Only add migrations here once the "Public release" item in ROADMAP.md is checked off.

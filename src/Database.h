@@ -1,6 +1,8 @@
 #pragma once
 
+#include <QList>
 #include <QString>
+#include <QStringList>
 #include <sqlite3.h>
 
 class Database
@@ -21,8 +23,21 @@ public:
         qint64 lastByteOffset{0};
     };
 
+    struct WhisperRecord {
+        QString direction;   // "from" or "to"
+        QString playerName;
+        QString message;
+        QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
+    };
+
     // Inserts the install path if new; returns current state either way.
     InstallState upsertInstall(const QString &installPath);
+
+    // Returns all whispers ordered by time; optionally filtered to one player.
+    QList<WhisperRecord> fetchWhispers(const QString &playerFilter = {}) const;
+
+    // Returns distinct whisper partner names, ordered by most-recent message.
+    QStringList fetchWhisperPartners() const;
 
 private:
     void applyPragmas();

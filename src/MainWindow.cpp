@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "Database.h"
+#include "DmPage.h"
 #include "GameOverlay.h"
 #include "LiveAlertsDialog.h"
 #include "LiveEventBus.h"
@@ -48,10 +49,12 @@ MainWindow::MainWindow(QWidget *parent)
     currentLayout->addWidget(m_taskPanel, 0);
 
     m_stack = new QStackedWidget(this);
+    m_dmPage = new DmPage(nullptr, this);
+
     m_stack->addWidget(new QWidget()); // Past
     m_stack->addWidget(currentPage);   // Current
     m_stack->addWidget(new QWidget()); // Chats
-    m_stack->addWidget(new QWidget()); // DMs
+    m_stack->addWidget(m_dmPage);     // DMs
 
     m_navBar = new NavBar({"Past", "Current", "Chats", "DMs"}, this);
     m_navBar->setCurrentIndex(1);
@@ -88,10 +91,13 @@ MainWindow::MainWindow(QWidget *parent)
     dbPath.chop(5); // strip ".toml"
     dbPath += ".db";
     m_db = new Database(dbPath);
-    if (m_db->isOpen())
+    if (m_db->isOpen()) {
         scheduleLogIngestion();
-    else
+        m_dmPage->setDatabase(m_db);
+        m_dmPage->reload();
+    } else {
         log("Database error", "db", m_db->lastError());
+    }
 
     m_tracker = WindowTracker::create();
 
