@@ -16,6 +16,7 @@ struct AppConfig {
     }
 
     QStringList executableNames; // empty = use knownExes()
+    bool debugLog{false};
     bool useGameOverlay{true};
     bool autoUpdate{true};
     bool autoStartOnBoot{false};

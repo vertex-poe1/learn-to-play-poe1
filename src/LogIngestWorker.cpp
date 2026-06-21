@@ -105,9 +105,9 @@ void LogIngestWorker::start()
     static const QRegularExpression afkRe(
         R"(AFK mode is now (ON|OFF))"
     );
-    // [INFO] @From YaYtOtEmZ: hey  /  @To YaYtOtEmZ: hello
+    // [INFO] @From YaYtOtEmZ: hey  /  @To <GUILD> YaYtOtEmZ: hello
     static const QRegularExpression whisperRe(
-        R"(@(From|To) ([^:]+): (.*))"
+        R"(@(From|To) (?:<([^>]*)> )?(\S+): (.*))"
     );
     // [INFO] Successfully (allocated|unallocated) passive skill id: accuracy581, name: Projectile Damage and Attack Speed
     static const QRegularExpression passiveAllocRe(
@@ -213,8 +213,11 @@ void LogIngestWorker::start()
     sqlite3_stmt *passiveAllocStmt     = nullptr;
     sqlite3_stmt *whisperStmt          = nullptr;
     sqlite3_stmt *deathStmt            = nullptr;
+    sqlite3_stmt *guildUpsertStmt      = nullptr;
+    sqlite3_stmt *guildSelectStmt      = nullptr;
     sqlite3_stmt *pubCharUpsertStmt    = nullptr;
     sqlite3_stmt *pubCharSelectStmt    = nullptr;
+    sqlite3_stmt *pubCharGuildStmt     = nullptr;
     sqlite3_stmt *chatStmt             = nullptr;
     sqlite3_stmt *achievUpsertStmt     = nullptr;
     sqlite3_stmt *achievSelectStmt     = nullptr;
@@ -336,11 +339,17 @@ void LogIngestWorker::start()
         "INSERT OR IGNORE INTO passive_skill_allocations(session_id, char_id, passive_skill_id, action, allocated_at) VALUES(?,?,?,?,?);",
         -1, &passiveAllocStmt, nullptr);
     sqlite3_prepare_v2(db,
-        "INSERT OR IGNORE INTO whispers(session_id, direction, player_name, message, occurred_at) VALUES(?,?,?,?,?);",
+        "INSERT OR IGNORE INTO whispers(session_id, direction, player_name, guild_id, message, occurred_at) VALUES(?,?,?,?,?,?);",
         -1, &whisperStmt, nullptr);
     sqlite3_prepare_v2(db,
         "INSERT OR IGNORE INTO character_deaths(session_id, char_id, area_id, level, occurred_at) VALUES(?,?,?,?,?);",
         -1, &deathStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO guilds(tag) VALUES(?);",
+        -1, &guildUpsertStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "SELECT id FROM guilds WHERE tag=?;",
+        -1, &guildSelectStmt, nullptr);
     sqlite3_prepare_v2(db,
         "INSERT OR IGNORE INTO public_chars(name) VALUES(?);",
         -1, &pubCharUpsertStmt, nullptr);
@@ -348,7 +357,10 @@ void LogIngestWorker::start()
         "SELECT id FROM public_chars WHERE name=?;",
         -1, &pubCharSelectStmt, nullptr);
     sqlite3_prepare_v2(db,
-        "INSERT OR IGNORE INTO chats(session_id, public_char_id, channel, guild_tag, message, occurred_at) VALUES(?,?,?,?,?,?);",
+        "UPDATE public_chars SET guild_id=? WHERE id=?;",
+        -1, &pubCharGuildStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO chats(session_id, public_char_id, channel, guild_id, message, occurred_at) VALUES(?,?,?,?,?,?);",
         -1, &chatStmt, nullptr);
     sqlite3_prepare_v2(db,
         "INSERT OR IGNORE INTO character_played_events(session_id, span_id, played_secs, occurred_at) VALUES(?,?,?,?);",
@@ -664,6 +676,50 @@ void LogIngestWorker::start()
         const qint64  lineStartPos = file.pos();
         const QString line         = QString::fromUtf8(file.readLine()).trimmed();
 
+        // ── session boundary ─────────────────────────────────────────────────
+        // LOG FILE OPENING lines have a different format with no hex ID or bracket:
+        //   "2026/06/03 22:30:25 ***** LOG FILE OPENING *****"
+        // They don't match lineRe, so handle them before the main parse gate.
+        if (line.contains(QLatin1String("LOG FILE OPENING"))) {
+            static const QRegularExpression logTsRe(
+                R"(^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}))");
+            const auto tsM = logTsRe.match(line);
+            if (tsM.hasMatch()) {
+                QString ts = tsM.captured(1);
+                ts[4] = '-'; ts[7] = '-';
+                const QByteArray tsBytes = ts.toUtf8();
+                const QString prevTs = lastTs;
+                lastTs = ts;
+
+                flushPassives();
+                closeSession(prevTs);
+
+                sqlite3_bind_int64(sessionInsertStmt, 1, m_installId);
+                sqlite3_bind_text (sessionInsertStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sqlite3_step(sessionInsertStmt);
+                sqlite3_reset(sessionInsertStmt);
+
+                sqlite3_bind_int64(sessionSelectStmt, 1, m_installId);
+                sqlite3_bind_text (sessionSelectStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sessionId = -1;
+                if (sqlite3_step(sessionSelectStmt) == SQLITE_ROW)
+                    sessionId = sqlite3_column_int64(sessionSelectStmt, 0);
+                sqlite3_reset(sessionSelectStmt);
+
+                sessionStartTs   = ts;
+                sessionAfkSecs   = 0;
+                sessionCharId    = -1;
+                sessionCharLevel = -1;
+                sessionAreaId    = -1;
+
+                openSpan(ts, -1);
+
+                if (m_liveMode.load(std::memory_order_relaxed))
+                    emit liveEventParsed(LiveEvent{LiveEventType::SessionStart, ts, {}});
+            }
+            continue;
+        }
+
         const auto hdr = lineRe.match(line);
         if (!hdr.hasMatch()) continue;
 
@@ -688,36 +744,7 @@ void LogIngestWorker::start()
             continue;
         }
 
-        // ── session boundary ─────────────────────────────────────────────────
-        if (message.contains(QLatin1String("LOG FILE OPENING"))) {
-            flushPassives();
-            closeSession(prevTs);
-
-            sqlite3_bind_int64(sessionInsertStmt, 1, m_installId);
-            sqlite3_bind_text (sessionInsertStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
-            sqlite3_step(sessionInsertStmt);
-            sqlite3_reset(sessionInsertStmt);
-
-            sqlite3_bind_int64(sessionSelectStmt, 1, m_installId);
-            sqlite3_bind_text (sessionSelectStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
-            sessionId = -1;
-            if (sqlite3_step(sessionSelectStmt) == SQLITE_ROW)
-                sessionId = sqlite3_column_int64(sessionSelectStmt, 0);
-            sqlite3_reset(sessionSelectStmt);
-
-            sessionStartTs   = ts;
-            sessionAfkSecs   = 0;
-            sessionCharId    = -1;
-            sessionCharLevel = -1;
-            sessionAreaId    = -1;
-
-            // Session starts at char select — open a NULL-area span.
-            openSpan(ts, -1);
-
-            if (m_liveMode.load(std::memory_order_relaxed))
-                emit liveEventParsed(LiveEvent{LiveEventType::SessionStart, ts, {}});
-
-        } else if (level == QLatin1String("DEBUG")) {
+        if (level == QLatin1String("DEBUG")) {
             const auto genM = generatingRe.match(message);
             if (genM.hasMatch()) {
                 pendingLevel = genM.captured(1).toInt();
@@ -1284,23 +1311,39 @@ void LogIngestWorker::start()
             // Whispers
             const auto whisperM = whisperRe.match(message);
             if (whisperM.hasMatch() && sessionId >= 0) {
-                const bool       isFrom    = (whisperM.captured(1) == QLatin1String("From"));
-                const QByteArray dirBytes  = isFrom ? QByteArrayLiteral("from") : QByteArrayLiteral("to");
-                const QByteArray nameBytes = whisperM.captured(2).toUtf8();
-                const QByteArray msgBytes  = whisperM.captured(3).toUtf8();
+                const bool       isFrom     = (whisperM.captured(1) == QLatin1String("From"));
+                const QByteArray dirBytes   = isFrom ? QByteArrayLiteral("from") : QByteArrayLiteral("to");
+                const QString    guildTag   = whisperM.captured(2);
+                const QByteArray guildBytes = guildTag.toUtf8();
+                const QByteArray nameBytes  = whisperM.captured(3).toUtf8();
+                const QByteArray msgBytes   = whisperM.captured(4).toUtf8();
+
+                qint64 guildId = -1;
+                if (!guildTag.isEmpty()) {
+                    sqlite3_bind_text(guildUpsertStmt, 1, guildBytes.constData(), guildBytes.size(), SQLITE_STATIC);
+                    sqlite3_step(guildUpsertStmt);
+                    sqlite3_reset(guildUpsertStmt);
+                    sqlite3_bind_text(guildSelectStmt, 1, guildBytes.constData(), guildBytes.size(), SQLITE_STATIC);
+                    if (sqlite3_step(guildSelectStmt) == SQLITE_ROW)
+                        guildId = sqlite3_column_int64(guildSelectStmt, 0);
+                    sqlite3_reset(guildSelectStmt);
+                }
+
                 sqlite3_bind_int64(whisperStmt, 1, sessionId);
                 sqlite3_bind_text (whisperStmt, 2, dirBytes.constData(),  dirBytes.size(),  SQLITE_STATIC);
                 sqlite3_bind_text (whisperStmt, 3, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
-                sqlite3_bind_text (whisperStmt, 4, msgBytes.constData(),  msgBytes.size(),  SQLITE_STATIC);
-                sqlite3_bind_text (whisperStmt, 5, tsBytes.constData(),   tsBytes.size(),   SQLITE_STATIC);
+                if (guildId < 0) sqlite3_bind_null (whisperStmt, 4);
+                else             sqlite3_bind_int64(whisperStmt, 4, guildId);
+                sqlite3_bind_text (whisperStmt, 5, msgBytes.constData(),  msgBytes.size(),  SQLITE_STATIC);
+                sqlite3_bind_text (whisperStmt, 6, tsBytes.constData(),   tsBytes.size(),   SQLITE_STATIC);
                 sqlite3_step(whisperStmt);
                 insertEvent(tsBytes, "whisper");
                 sqlite3_reset(whisperStmt);
                 if (m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::Whisper, ts, {
                         {"direction", isFrom ? QString("from") : QString("to")},
-                        {"player",    whisperM.captured(2)},
-                        {"message",   whisperM.captured(3)}
+                        {"player",    whisperM.captured(3)},
+                        {"message",   whisperM.captured(4)}
                     }});
             }
 
@@ -1338,8 +1381,20 @@ void LogIngestWorker::start()
             if (chatM.hasMatch() && sessionId >= 0) {
                 const QByteArray channelBytes  = chatM.captured(1).toUtf8();
                 const QString    guildTag      = chatM.captured(2);
+                const QByteArray guildBytes    = guildTag.toUtf8();
                 const QByteArray speakerBytes  = chatM.captured(3).toUtf8();
                 const QByteArray messageBytes  = chatM.captured(4).toUtf8();
+
+                qint64 guildId = -1;
+                if (!guildTag.isEmpty()) {
+                    sqlite3_bind_text(guildUpsertStmt, 1, guildBytes.constData(), guildBytes.size(), SQLITE_STATIC);
+                    sqlite3_step(guildUpsertStmt);
+                    sqlite3_reset(guildUpsertStmt);
+                    sqlite3_bind_text(guildSelectStmt, 1, guildBytes.constData(), guildBytes.size(), SQLITE_STATIC);
+                    if (sqlite3_step(guildSelectStmt) == SQLITE_ROW)
+                        guildId = sqlite3_column_int64(guildSelectStmt, 0);
+                    sqlite3_reset(guildSelectStmt);
+                }
 
                 sqlite3_bind_text(pubCharUpsertStmt, 1, speakerBytes.constData(), speakerBytes.size(), SQLITE_STATIC);
                 sqlite3_step(pubCharUpsertStmt);
@@ -1352,14 +1407,18 @@ void LogIngestWorker::start()
                 sqlite3_reset(pubCharSelectStmt);
 
                 if (pubCharId >= 0) {
-                    const QByteArray guildBytes = guildTag.toUtf8();
+                    if (guildId >= 0) {
+                        sqlite3_bind_int64(pubCharGuildStmt, 1, guildId);
+                        sqlite3_bind_int64(pubCharGuildStmt, 2, pubCharId);
+                        sqlite3_step(pubCharGuildStmt);
+                        sqlite3_reset(pubCharGuildStmt);
+                    }
+
                     sqlite3_bind_int64(chatStmt, 1, sessionId);
                     sqlite3_bind_int64(chatStmt, 2, pubCharId);
                     sqlite3_bind_text (chatStmt, 3, channelBytes.constData(), channelBytes.size(), SQLITE_STATIC);
-                    if (guildTag.isEmpty())
-                        sqlite3_bind_null(chatStmt, 4);
-                    else
-                        sqlite3_bind_text(chatStmt, 4, guildBytes.constData(), guildBytes.size(), SQLITE_STATIC);
+                    if (guildId < 0) sqlite3_bind_null (chatStmt, 4);
+                    else             sqlite3_bind_int64(chatStmt, 4, guildId);
                     sqlite3_bind_text (chatStmt, 5, messageBytes.constData(), messageBytes.size(), SQLITE_STATIC);
                     sqlite3_bind_text (chatStmt, 6, tsBytes.constData(),      tsBytes.size(),      SQLITE_STATIC);
                     sqlite3_step(chatStmt);
@@ -1508,8 +1567,11 @@ void LogIngestWorker::start()
     sqlite3_finalize(passiveAllocStmt);
     sqlite3_finalize(whisperStmt);
     sqlite3_finalize(deathStmt);
+    sqlite3_finalize(guildUpsertStmt);
+    sqlite3_finalize(guildSelectStmt);
     sqlite3_finalize(pubCharUpsertStmt);
     sqlite3_finalize(pubCharSelectStmt);
+    sqlite3_finalize(pubCharGuildStmt);
     sqlite3_finalize(chatStmt);
     sqlite3_finalize(achievUpsertStmt);
     sqlite3_finalize(achievSelectStmt);

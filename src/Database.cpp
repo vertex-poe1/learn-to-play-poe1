@@ -1,9 +1,12 @@
 #include "Database.h"
 
 #include <sqlite3.h>
+#include <algorithm>
 #include <cstdio>
+#include <QDebug>
+#include <QElapsedTimer>
 
-static constexpr int kDbVersion = 1;
+static constexpr int kDbVersion = 3;
 
 static void execSql(sqlite3 *db, const char *sql)
 {
@@ -221,6 +224,7 @@ void Database::initSchema()
             session_id  INTEGER NOT NULL REFERENCES sessions(id),
             direction   TEXT    NOT NULL CHECK(direction IN ('from', 'to')),
             player_name TEXT    NOT NULL,
+            guild_id    INTEGER REFERENCES guilds(id),
             message     TEXT    NOT NULL,
             occurred_at TEXT    NOT NULL,
             UNIQUE(session_id, occurred_at, direction, player_name)
@@ -250,11 +254,20 @@ void Database::initSchema()
         );
     )");
 
-    // Players seen only in public chat — name only, no class/level info required.
+    execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS guilds (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            tag  TEXT    NOT NULL UNIQUE,
+            name TEXT    NOT NULL DEFAULT ''
+        );
+    )");
+
+    // Players seen only in public chat or whispers — name only, no class/level info required.
     execSql(m_db, R"(
         CREATE TABLE IF NOT EXISTS public_chars (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT    NOT NULL UNIQUE
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            name     TEXT    NOT NULL UNIQUE,
+            guild_id INTEGER REFERENCES guilds(id)
         );
     )");
 
@@ -384,7 +397,7 @@ void Database::initSchema()
             session_id     INTEGER NOT NULL REFERENCES sessions(id),
             public_char_id INTEGER NOT NULL REFERENCES public_chars(id),
             channel        TEXT    NOT NULL,
-            guild_tag      TEXT,
+            guild_id       INTEGER REFERENCES guilds(id),
             message        TEXT    NOT NULL,
             occurred_at    TEXT    NOT NULL,
             UNIQUE(session_id, occurred_at, public_char_id, channel)
@@ -436,24 +449,44 @@ void Database::initSchema()
         migrate(version);
 }
 
-QList<Database::WhisperRecord> Database::fetchWhispers(const QString &playerFilter) const
+QList<Database::WhisperRecord> Database::fetchWhispers(const QString &playerFilter, int limit) const
 {
     if (!m_db) return {};
 
     sqlite3_stmt *stmt = nullptr;
     QByteArray nameBytes;
 
+    // When a limit is requested, fetch DESC so we get the most recent N rows,
+    // then reverse in memory to restore chronological order for display.
+    const bool useLimit = limit > 0;
+    const char *order = useLimit ? "DESC" : "ASC";
+
+    char sql[256];
     if (playerFilter.isEmpty()) {
-        sqlite3_prepare_v2(m_db,
-            "SELECT direction, player_name, message, occurred_at "
-            "FROM whispers ORDER BY occurred_at ASC;",
-            -1, &stmt, nullptr);
+        if (useLimit)
+            std::snprintf(sql, sizeof(sql),
+                "SELECT w.direction, w.player_name, g.tag, w.message, w.occurred_at "
+                "FROM whispers w LEFT JOIN guilds g ON g.id = w.guild_id "
+                "ORDER BY w.occurred_at %s LIMIT %d;", order, limit);
+        else
+            std::snprintf(sql, sizeof(sql),
+                "SELECT w.direction, w.player_name, g.tag, w.message, w.occurred_at "
+                "FROM whispers w LEFT JOIN guilds g ON g.id = w.guild_id "
+                "ORDER BY w.occurred_at ASC;");
+        sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr);
     } else {
         nameBytes = playerFilter.toUtf8();
-        sqlite3_prepare_v2(m_db,
-            "SELECT direction, player_name, message, occurred_at "
-            "FROM whispers WHERE player_name = ? ORDER BY occurred_at ASC;",
-            -1, &stmt, nullptr);
+        if (useLimit)
+            std::snprintf(sql, sizeof(sql),
+                "SELECT w.direction, w.player_name, g.tag, w.message, w.occurred_at "
+                "FROM whispers w LEFT JOIN guilds g ON g.id = w.guild_id "
+                "WHERE w.player_name = ? ORDER BY w.occurred_at %s LIMIT %d;", order, limit);
+        else
+            std::snprintf(sql, sizeof(sql),
+                "SELECT w.direction, w.player_name, g.tag, w.message, w.occurred_at "
+                "FROM whispers w LEFT JOIN guilds g ON g.id = w.guild_id "
+                "WHERE w.player_name = ? ORDER BY w.occurred_at ASC;");
+        sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr);
         sqlite3_bind_text(stmt, 1, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
     }
 
@@ -462,11 +495,17 @@ QList<Database::WhisperRecord> Database::fetchWhispers(const QString &playerFilt
         WhisperRecord r;
         r.direction  = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)));
         r.playerName = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)));
-        r.message    = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
-        r.occurredAt = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        if (const auto *g = sqlite3_column_text(stmt, 2))
+            r.guildTag = QString::fromUtf8(reinterpret_cast<const char *>(g));
+        r.message    = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        r.occurredAt = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)));
         result.append(r);
     }
     sqlite3_finalize(stmt);
+
+    if (useLimit)
+        std::reverse(result.begin(), result.end());
+
     return result;
 }
 
@@ -491,8 +530,20 @@ void Database::migrate(int fromVersion)
 {
     // Only add migrations here once the "Public release" item in ROADMAP.md is checked off.
     // Until then the app is unreleased and all users start from a fresh database.
-    (void)fromVersion;
+    QElapsedTimer t; t.start();
+    qDebug() << "[DB] migrate from" << fromVersion;
+    if (fromVersion < 3) {
+        // guilds table is created by initSchema via CREATE TABLE IF NOT EXISTS.
+        // guild_tag columns in old databases are left in place but unused.
+        qDebug() << "[DB] ALTER whispers +guild_id";
+        execSql(m_db, "ALTER TABLE whispers ADD COLUMN guild_id INTEGER REFERENCES guilds(id);");
+        qDebug() << "[DB] ALTER public_chars +guild_id";
+        execSql(m_db, "ALTER TABLE public_chars ADD COLUMN guild_id INTEGER REFERENCES guilds(id);");
+        qDebug() << "[DB] ALTER chats +guild_id";
+        execSql(m_db, "ALTER TABLE chats ADD COLUMN guild_id INTEGER REFERENCES guilds(id);");
+    }
     setUserVersion(m_db, kDbVersion);
+    qDebug() << "[DB] migrate done in" << t.elapsed() << "ms";
 }
 
 Database::InstallState Database::upsertInstall(const QString &installPath)

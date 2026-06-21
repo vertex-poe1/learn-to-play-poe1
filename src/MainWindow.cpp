@@ -14,6 +14,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDebug>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QIcon>
 #include <QLabel>
@@ -32,6 +34,9 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    QElapsedTimer startupTimer; startupTimer.start();
+    qDebug() << "[startup] begin";
+
     setWindowTitle("Learn to Play: Path of Exile 1");
     setWindowIcon(QIcon(":/icons/vertex-icon.png"));
     resize(720, 480);
@@ -69,7 +74,9 @@ MainWindow::MainWindow(QWidget *parent)
     vbox->addWidget(m_stack, 1);
     setCentralWidget(container);
 
+    qDebug() << "[startup] UI built in" << startupTimer.elapsed() << "ms";
     m_config = AppConfig::load();
+    qDebug() << "[startup] config loaded in" << startupTimer.elapsed() << "ms";
 
     m_ruleEngine = new LiveEventRuleEngine(this);
     m_ruleEngine->setRules(m_config.liveAlertRules);
@@ -90,16 +97,21 @@ MainWindow::MainWindow(QWidget *parent)
     QString dbPath = AppConfig::configPath();
     dbPath.chop(5); // strip ".toml"
     dbPath += ".db";
+    qDebug() << "[startup] opening DB:" << dbPath;
     m_db = new Database(dbPath);
+    qDebug() << "[startup] DB open in" << startupTimer.elapsed() << "ms, ok=" << m_db->isOpen();
     if (m_db->isOpen()) {
+        qDebug() << "[startup] scheduleLogIngestion";
         scheduleLogIngestion();
+        qDebug() << "[startup] scheduleLogIngestion done in" << startupTimer.elapsed() << "ms";
         m_dmPage->setDatabase(m_db);
-        m_dmPage->reload();
     } else {
         log("Database error", "db", m_db->lastError());
     }
 
+    qDebug() << "[startup] creating WindowTracker";
     m_tracker = WindowTracker::create();
+    qDebug() << "[startup] WindowTracker done in" << startupTimer.elapsed() << "ms";
 
     m_overlay = new GameOverlay(this);
 

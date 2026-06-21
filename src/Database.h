@@ -26,6 +26,7 @@ public:
     struct WhisperRecord {
         QString direction;   // "from" or "to"
         QString playerName;
+        QString guildTag;    // may be empty
         QString message;
         QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
     };
@@ -33,8 +34,9 @@ public:
     // Inserts the install path if new; returns current state either way.
     InstallState upsertInstall(const QString &installPath);
 
-    // Returns all whispers ordered by time; optionally filtered to one player.
-    QList<WhisperRecord> fetchWhispers(const QString &playerFilter = {}) const;
+    // Returns whispers ordered by time; optionally filtered to one player.
+    // limit > 0 returns only the most recent N messages.
+    QList<WhisperRecord> fetchWhispers(const QString &playerFilter = {}, int limit = 0) const;
 
     // Returns distinct whisper partner names, ordered by most-recent message.
     QStringList fetchWhisperPartners() const;

@@ -7,7 +7,10 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDateTime>
+#include <QFile>
 #include <QFileInfo>
+#include <QTextStream>
 
 static int runIngest(int argc, char *argv[])
 {
@@ -77,6 +80,21 @@ static int runIngest(int argc, char *argv[])
     return app.exec();
 }
 
+static QFile       *s_logFile   = nullptr;
+static QTextStream *s_logStream = nullptr;
+
+static void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QString &msg)
+{
+    if (!s_logStream) return;
+    const char *level = "D";
+    if      (type == QtWarningMsg)  level = "W";
+    else if (type == QtCriticalMsg) level = "E";
+    else if (type == QtFatalMsg)    level = "F";
+    *s_logStream << QDateTime::currentDateTime().toString("HH:mm:ss.zzz")
+                 << " [" << level << "] " << msg << '\n';
+    s_logStream->flush();
+}
+
 int main(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i) {
@@ -89,11 +107,29 @@ int main(int argc, char *argv[])
     app.setApplicationVersion("0.1.0");
     app.setQuitOnLastWindowClosed(false);
 
+    // Load config early so we can honour debug_log before MainWindow starts up.
+    const AppConfig earlyConfig = AppConfig::load();
+    if (earlyConfig.debugLog) {
+        QString logPath = AppConfig::configPath();
+        logPath.chop(5); // strip ".toml"
+        logPath += ".log";
+        s_logFile = new QFile(logPath);
+        if (s_logFile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+            s_logStream = new QTextStream(s_logFile);
+            qInstallMessageHandler(fileMessageHandler);
+        }
+    }
+
     Theme::apply(app);
 
     MainWindow window;
     if (!window.startMinimized())
         window.show();
 
-    return app.exec();
+    const int ret = app.exec();
+
+    qInstallMessageHandler(nullptr);
+    delete s_logStream; s_logStream = nullptr;
+    delete s_logFile;   s_logFile   = nullptr;
+    return ret;
 }

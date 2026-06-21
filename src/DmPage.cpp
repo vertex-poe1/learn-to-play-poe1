@@ -3,9 +3,13 @@
 #include "LiveEvent.h"
 #include "LiveEventBus.h"
 
+#include <QAbstractItemView>
 #include <QComboBox>
+#include <QDebug>
+#include <QElapsedTimer>
 #include <QFrame>
 #include <QPainter>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -21,6 +25,9 @@ public:
         : QWidget(parent), m_date(date)
     {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        QFont f = font();
+        f.setPointSizeF(f.pointSizeF() + 2);
+        setFont(f);
     }
 
     QSize sizeHint() const override
@@ -68,6 +75,9 @@ public:
         QSizePolicy sp(QSizePolicy::Expanding, QSizePolicy::Preferred);
         sp.setHeightForWidth(true);
         setSizePolicy(sp);
+        QFont f = font();
+        f.setPointSizeF(f.pointSizeF() + 2);
+        setFont(f);
     }
 
     bool hasHeightForWidth() const override { return true; }
@@ -182,13 +192,27 @@ private:
     bool    m_showName;
 };
 
+// ---- BoundedComboBox --------------------------------------------------------
+
+class BoundedComboBox : public QComboBox
+{
+public:
+    using QComboBox::QComboBox;
+    void showPopup() override
+    {
+        if (auto *w = window())
+            view()->setMaximumHeight(w->height());
+        QComboBox::showPopup();
+    }
+};
+
 // ---- DmPage ----------------------------------------------------------------
 
 DmPage::DmPage(Database *db, QWidget *parent)
     : QWidget(parent)
     , m_db(db)
 {
-    m_filter = new QComboBox(this);
+    m_filter = new BoundedComboBox(this);
     m_filter->addItem("All conversations");
 
     m_scroll = new QScrollArea(this);
@@ -209,6 +233,17 @@ DmPage::DmPage(Database *db, QWidget *parent)
     connect(m_filter, &QComboBox::currentIndexChanged,
             this, &DmPage::onFilterChanged);
 
+    m_liveRebuildTimer = new QTimer(this);
+    m_liveRebuildTimer->setSingleShot(true);
+    m_liveRebuildTimer->setInterval(300);
+    connect(m_liveRebuildTimer, &QTimer::timeout, this, [this] {
+        if (!isVisible()) { m_dirty = true; return; }
+        populateFilter();
+        rebuild();
+        if (m_liveRebuildScrollToBottom)
+            QTimer::singleShot(0, this, &DmPage::scrollToBottom);
+    });
+
     connect(LiveEventBus::instance(), &LiveEventBus::eventFired,
             this, &DmPage::onLiveWhisper);
 }
@@ -220,28 +255,41 @@ void DmPage::setDatabase(Database *db)
 
 void DmPage::reload()
 {
+    m_dirty = false;
+    m_limit = 100;
     populateFilter();
     rebuild();
     QTimer::singleShot(0, this, &DmPage::scrollToBottom);
+}
+
+void DmPage::showEvent(QShowEvent *e)
+{
+    QWidget::showEvent(e);
+    if (m_dirty && m_db)
+        reload();
 }
 
 void DmPage::onLiveWhisper(const LiveEvent &event)
 {
     if (event.type != LiveEventType::Whisper) return;
 
-    const bool atBottom = m_scroll->verticalScrollBar()->value()
-                          >= m_scroll->verticalScrollBar()->maximum() - 4;
+    if (!isVisible()) {
+        m_dirty = true;
+        return;
+    }
 
-    // Refresh combo in case this is a new partner
-    populateFilter();
-    rebuild();
+    // Capture scroll position at the leading edge of each burst so we know
+    // whether to auto-scroll after the debounced rebuild fires.
+    if (!m_liveRebuildTimer->isActive())
+        m_liveRebuildScrollToBottom = m_scroll->verticalScrollBar()->value()
+                                      >= m_scroll->verticalScrollBar()->maximum() - 4;
 
-    if (atBottom)
-        QTimer::singleShot(0, this, &DmPage::scrollToBottom);
+    m_liveRebuildTimer->start(); // restarts the 300 ms window on every event
 }
 
 void DmPage::onFilterChanged(int /*index*/)
 {
+    m_limit = 100;
     rebuild();
     QTimer::singleShot(0, this, &DmPage::scrollToBottom);
 }
@@ -250,33 +298,55 @@ void DmPage::rebuild()
 {
     if (!m_db) return;
 
-    delete m_content;
-    m_content = new QWidget;
-    m_contentLayout = new QVBoxLayout(m_content);
-    m_contentLayout->setContentsMargins(8, 8, 8, 8);
-    m_contentLayout->setSpacing(2);
-    m_contentLayout->addStretch(1);
-    m_scroll->setWidget(m_content);
+    QElapsedTimer t; t.start();
 
     const QString filterPlayer = m_filter->currentIndex() > 0
                                      ? m_filter->currentText()
                                      : QString{};
     const bool showNames = filterPlayer.isEmpty();
 
-    const QList<Database::WhisperRecord> whispers = m_db->fetchWhispers(filterPlayer);
+    const QList<Database::WhisperRecord> whispers = m_db->fetchWhispers(filterPlayer, m_limit);
+    qDebug() << "[DmPage] fetchWhispers returned" << whispers.size() << "rows in" << t.elapsed() << "ms";
+
+    // Build content widget fully before handing it to the scroll area so that
+    // the layout engine only performs one pass instead of N passes (one per addWidget).
+    auto *content       = new QWidget;
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(8, 8, 8, 8);
+    contentLayout->setSpacing(2);
+    contentLayout->addStretch(1);
+
+    if (whispers.size() == m_limit) {
+        auto *btn = new QPushButton(
+            QStringLiteral("Load previous 50 messages"), content);
+        btn->setFlat(true);
+        connect(btn, &QPushButton::clicked, this, [this] {
+            m_limit += 50;
+            rebuild();
+        });
+        contentLayout->addWidget(btn);
+    }
 
     QString lastDate;
     for (const auto &w : whispers) {
         const QString date = w.occurredAt.left(10);
         if (date != lastDate) {
             lastDate = date;
-            m_contentLayout->addWidget(new DateSeparator(date, m_content));
+            contentLayout->addWidget(new DateSeparator(date, content));
         }
         const QString time = w.occurredAt.mid(11, 5);
-        m_contentLayout->addWidget(
+        contentLayout->addWidget(
             new WhisperBubble(w.direction, w.playerName, w.message,
-                              time, showNames, m_content));
+                              time, showNames, content));
     }
+
+    qDebug() << "[DmPage] widgets built in" << t.elapsed() << "ms";
+    // Replace live references and hand the fully-built widget to the scroll area.
+    delete m_content;
+    m_content       = content;
+    m_contentLayout = contentLayout;
+    m_scroll->setWidget(m_content);
+    qDebug() << "[DmPage] rebuild done in" << t.elapsed() << "ms";
 }
 
 void DmPage::populateFilter()

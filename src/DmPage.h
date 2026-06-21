@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QShowEvent>
 #include <QWidget>
 
 class Database;
@@ -20,6 +21,9 @@ public:
 public slots:
     void onLiveWhisper(const LiveEvent &event);
 
+protected:
+    void showEvent(QShowEvent *e) override;
+
 private slots:
     void onFilterChanged(int index);
 
@@ -33,4 +37,8 @@ private:
     QScrollArea *m_scroll{};
     QWidget     *m_content{};
     QVBoxLayout *m_contentLayout{};
+    QTimer      *m_liveRebuildTimer{};
+    bool         m_liveRebuildScrollToBottom{false};
+    bool         m_dirty{true};
+    int          m_limit{100};
 };

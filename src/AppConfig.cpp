@@ -38,6 +38,7 @@ AppConfig AppConfig::load()
                     cfg.executableNames << QString::fromStdString(*val);
             }
         }
+        cfg.debugLog              = tbl["debug_log"].value_or(false);
         cfg.useGameOverlay        = tbl["use_game_overlay"].value_or(true);
         cfg.autoUpdate            = tbl["auto_update"].value_or(true);
         cfg.autoStartOnBoot       = tbl["auto_start_on_boot"].value_or(false);
@@ -107,6 +108,7 @@ void AppConfig::save() const
     for (const QString &exe : executableNames)
         exeArr.push_back(exe.toStdString());
     tbl.insert("executable_names", std::move(exeArr));
+    tbl.insert("debug_log",               debugLog);
     tbl.insert("use_game_overlay",        useGameOverlay);
     tbl.insert("auto_update",             autoUpdate);
     tbl.insert("auto_start_on_boot",      autoStartOnBoot);
