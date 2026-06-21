@@ -14,6 +14,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QScreen>
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -77,6 +78,30 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[startup] UI built in" << startupTimer.elapsed() << "ms";
     m_config = AppConfig::load();
     qDebug() << "[startup] config loaded in" << startupTimer.elapsed() << "ms";
+
+    // Restore saved window geometry; if the saved screen no longer exists, keep
+    // the saved size but let the OS decide placement.
+    const WindowGeometry &wg = m_config.windowGeometry;
+    if (!wg.screen.isEmpty()) {
+        bool screenFound = false;
+        for (QScreen *s : QApplication::screens()) {
+            if (s->name() == wg.screen) { screenFound = true; break; }
+        }
+        resize(wg.width, wg.height);
+        if (screenFound)
+            move(wg.x, wg.y);
+    }
+
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
+        WindowGeometry &wg = m_config.windowGeometry;
+        wg.x      = x();
+        wg.y      = y();
+        wg.width  = width();
+        wg.height = height();
+        if (QScreen *s = screen())
+            wg.screen = s->name();
+        m_config.save();
+    });
 
     m_ruleEngine = new LiveEventRuleEngine(this);
     m_ruleEngine->setRules(m_config.liveAlertRules);

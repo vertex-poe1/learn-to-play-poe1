@@ -7,6 +7,12 @@
 #include <QStringList>
 #include <QVector>
 
+struct WindowGeometry {
+    int     x{0}, y{0};
+    int     width{720}, height{480};
+    QString screen; // empty = no saved geometry
+};
+
 struct AppConfig {
     static QStringList knownExes()
     {
@@ -26,6 +32,7 @@ struct AppConfig {
     QStringList installDirs;
     QHash<int, QString>    channelNames;    // channel number → user-defined label
     QVector<LiveEventRule> liveAlertRules;
+    WindowGeometry         windowGeometry;
 
     static AppConfig load();
     void save() const;

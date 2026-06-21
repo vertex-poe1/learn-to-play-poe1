@@ -92,6 +92,14 @@ AppConfig AppConfig::load()
                     cfg.liveAlertRules.append(rule);
             }
         }
+        if (const auto *win = tbl["window"].as_table()) {
+            cfg.windowGeometry.x      = (int)(*win)["x"].value_or<int64_t>(0);
+            cfg.windowGeometry.y      = (int)(*win)["y"].value_or<int64_t>(0);
+            cfg.windowGeometry.width  = (int)(*win)["width"].value_or<int64_t>(720);
+            cfg.windowGeometry.height = (int)(*win)["height"].value_or<int64_t>(480);
+            if (auto v = (*win)["screen"].value<std::string>())
+                cfg.windowGeometry.screen = QString::fromStdString(*v);
+        }
     } catch (const toml::parse_error &) {
         // File exists but is invalid — use defaults silently
     }
@@ -147,6 +155,16 @@ void AppConfig::save() const
         rulesArr.push_back(std::move(rt));
     }
     tbl.insert("live_alert_rules", std::move(rulesArr));
+
+    if (!windowGeometry.screen.isEmpty()) {
+        toml::table winTbl;
+        winTbl.insert("x",      (int64_t)windowGeometry.x);
+        winTbl.insert("y",      (int64_t)windowGeometry.y);
+        winTbl.insert("width",  (int64_t)windowGeometry.width);
+        winTbl.insert("height", (int64_t)windowGeometry.height);
+        winTbl.insert("screen", windowGeometry.screen.toStdString());
+        tbl.insert("window", std::move(winTbl));
+    }
 
     std::ofstream ofs(path.toStdString());
     ofs << tbl;
