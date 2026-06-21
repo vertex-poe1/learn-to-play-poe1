@@ -430,6 +430,15 @@ void Database::initSchema()
     // Operational metadata: arbitrary key→value pairs for the app's own bookkeeping
     // (maintenance timestamps, etc.). Not user configuration; not game data.
     execSql(m_db, R"(
+        CREATE TABLE IF NOT EXISTS npc_dialog_entries (
+            message_hash  TEXT NOT NULL PRIMARY KEY,
+            npc_name      TEXT NOT NULL,
+            npc_name_hash TEXT NOT NULL,
+            label         TEXT
+        );
+    )");
+
+    execSql(m_db, R"(
         CREATE TABLE IF NOT EXISTS app_state (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -745,4 +754,34 @@ Database::InstallState Database::upsertInstall(const QString &installPath)
     }
     sqlite3_finalize(stmt);
     return state;
+}
+
+int Database::upsertNpcDialogEntries(const QList<NpcDialogEntry> &entries)
+{
+    if (!m_db || entries.isEmpty()) return 0;
+
+    execSql(m_db, "BEGIN;");
+
+    sqlite3_stmt *stmt = nullptr;
+    sqlite3_prepare_v2(m_db,
+        "INSERT OR IGNORE INTO npc_dialog_entries (message_hash, npc_name, npc_name_hash) "
+        "VALUES (?, ?, ?);",
+        -1, &stmt, nullptr);
+
+    int inserted = 0;
+    for (const NpcDialogEntry &e : entries) {
+        const QByteArray mh  = e.messageHash.toUtf8();
+        const QByteArray nm  = e.npcName.toUtf8();
+        const QByteArray nmh = e.npcNameHash.toUtf8();
+        sqlite3_bind_text(stmt, 1, mh.constData(),  mh.size(),  SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, nm.constData(),  nm.size(),  SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 3, nmh.constData(), nmh.size(), SQLITE_STATIC);
+        if (sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(m_db) > 0)
+            ++inserted;
+        sqlite3_reset(stmt);
+    }
+
+    sqlite3_finalize(stmt);
+    execSql(m_db, "COMMIT;");
+    return inserted;
 }

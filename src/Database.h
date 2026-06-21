@@ -24,6 +24,13 @@ public:
         qint64 lastByteOffset{0};
     };
 
+    struct NpcDialogEntry {
+        QString messageHash;
+        QString npcName;
+        QString npcNameHash;
+        QString label;        // may be empty; preserved on conflict
+    };
+
     struct WhisperRecord {
         QString direction;   // "from" or "to"
         QString playerName;
@@ -48,6 +55,11 @@ public:
 
     // Inserts the install path if new; returns current state either way.
     InstallState upsertInstall(const QString &installPath);
+
+    // Inserts NPC dialog entries; existing rows (by message_hash) are left
+    // untouched so hand-assigned labels are never overwritten.
+    // Returns the number of rows newly inserted.
+    int upsertNpcDialogEntries(const QList<NpcDialogEntry> &entries);
 
     // Returns whispers ordered by time; optionally filtered to one player.
     // limit > 0 returns only the most recent N messages.

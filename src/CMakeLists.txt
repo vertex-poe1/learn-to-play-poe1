@@ -5,6 +5,9 @@ qt_add_executable(l2p-poe1
     main.cpp
     AppConfig.cpp
     AppConfig.h
+    Cli.cpp
+    Cli.h
+    DialogHash.h
     AppStyle.cpp
     AppStyle.h
     BackgroundWorker.h
