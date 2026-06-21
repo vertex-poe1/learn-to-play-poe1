@@ -40,8 +40,8 @@ qt_add_executable(l2p-poe1
     NotificationWidget.h
     NotificationsPanel.cpp
     NotificationsPanel.h
-    SettingsDialog.cpp
-    SettingsDialog.h
+    SettingsPage.cpp
+    SettingsPage.h
     TaskManager.cpp
     TaskManager.h
     TaskPanel.cpp
@@ -56,6 +56,14 @@ qt_add_resources(l2p-poe1 "resources"
     BASE "${CMAKE_SOURCE_DIR}/assets/logo"
     FILES
         "${CMAKE_SOURCE_DIR}/assets/logo/vertex-icon.png"
+)
+
+qt_add_resources(l2p-poe1 "svgicons"
+    PREFIX "/icons"
+    BASE "${CMAKE_SOURCE_DIR}/assets/icons"
+    FILES
+        "${CMAKE_SOURCE_DIR}/assets/icons/gear.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/gear-fill.svg"
 )
 
 if (WIN32)
@@ -73,6 +81,7 @@ endif()
 
 target_link_libraries(l2p-poe1 PRIVATE
     Qt6::Core
+    Qt6::Svg
     Qt6::Widgets
     tomlplusplus::tomlplusplus
     unofficial::sqlite3::sqlite3

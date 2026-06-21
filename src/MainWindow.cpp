@@ -7,7 +7,7 @@
 #include "LiveEventBus.h"
 #include "LiveEventRuleEngine.h"
 #include "LogIngestWorker.h"
-#include "SettingsDialog.h"
+#include "SettingsPage.h"
 #include "TaskManager.h"
 #include "TaskPanel.h"
 #include "WindowTracker.h"
@@ -66,7 +66,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_navBar = new NavBar({"Past", "Current", "Chats", "DMs"}, this);
     m_navBar->setCurrentIndex(1);
     m_stack->setCurrentIndex(1);
-    connect(m_navBar, &NavBar::currentChanged, m_stack, &QStackedWidget::setCurrentIndex);
+    connect(m_navBar, &NavBar::currentChanged, this, &MainWindow::onTabChanged);
+    connect(m_navBar, &NavBar::settingsClicked, this, &MainWindow::onGearClicked);
 
     auto *container = new QWidget(this);
     auto *vbox = new QVBoxLayout(container);
@@ -80,6 +81,11 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[startup] UI built in" << startupTimer.elapsed() << "ms";
     m_config = AppConfig::load();
     qDebug() << "[startup] config loaded in" << startupTimer.elapsed() << "ms";
+
+    m_settingsPage = new SettingsPage(m_config, this);
+    m_stack->addWidget(m_settingsPage); // Settings - index 4
+    connect(m_settingsPage, &SettingsPage::configChanged,
+            this, &MainWindow::onConfigChanged);
 
     // Restore saved window geometry; if the saved screen no longer exists, keep
     // the saved size but let the OS decide placement.
@@ -164,12 +170,6 @@ void MainWindow::setupMenuBar()
     fileMenu->addAction("Live &Alerts…", this, &MainWindow::showLiveAlerts);
     fileMenu->addSeparator();
     fileMenu->addAction("E&xit", qApp, &QApplication::quit);
-
-    QMenu *viewMenu = menuBar()->addMenu("&View");
-    m_viewTaskPanelAction = viewMenu->addAction("&Task Panel");
-    m_viewTaskPanelAction->setCheckable(true);
-    m_viewTaskPanelAction->setChecked(false);
-    connect(m_viewTaskPanelAction, &QAction::toggled, m_taskPanel, &TaskPanel::setForcedVisible);
 }
 
 void MainWindow::setupTray()
@@ -199,14 +199,23 @@ void MainWindow::showWindow()
 
 void MainWindow::showSettings()
 {
-    if (!m_settingsDialog) {
-        m_settingsDialog = new SettingsDialog(m_config, this);
-        connect(m_settingsDialog, &SettingsDialog::configChanged,
-                this, &MainWindow::onConfigChanged);
-    }
-    m_settingsDialog->show();
-    m_settingsDialog->raise();
-    m_settingsDialog->activateWindow();
+    showWindow();
+    m_navBar->setGearActive(true);
+    m_stack->setCurrentIndex(4);
+}
+
+void MainWindow::onTabChanged(int index)
+{
+    m_navBar->setGearActive(false);
+    m_stack->setCurrentIndex(index);
+}
+
+void MainWindow::onGearClicked()
+{
+    if (m_stack->currentIndex() == 4)
+        onTabChanged(m_navBar->currentIndex());
+    else
+        showSettings();
 }
 
 void MainWindow::showLiveAlerts()
@@ -224,6 +233,7 @@ void MainWindow::onConfigChanged()
     log("Settings saved.");
     m_chatPage->setShowGuildTags(m_config.showGuildTags);
     m_dmPage->setShowGuildTags(m_config.showGuildTags);
+    m_ruleEngine->setRules(m_config.liveAlertRules);
 }
 
 void MainWindow::onPollTimer()

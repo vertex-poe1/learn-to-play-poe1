@@ -21,7 +21,7 @@ class Database;
 class GameOverlay;
 class LiveEventRuleEngine;
 class LogIngestWorker;
-class SettingsDialog;
+class SettingsPage;
 class TaskManager;
 class TaskPanel;
 class WindowTracker;
@@ -50,6 +50,8 @@ private slots:
     void onConfigChanged();
     void onPollTimer();
     void onTaskUpdated(int id);
+    void onTabChanged(int index);
+    void onGearClicked();
 
 private:
     void showWindow();
@@ -74,8 +76,7 @@ private:
     QStackedWidget     *m_stack{};
     QSystemTrayIcon    *m_tray{};
     QMenu              *m_trayMenu{};
-    SettingsDialog     *m_settingsDialog{};
-    QAction            *m_viewTaskPanelAction{};
+    SettingsPage       *m_settingsPage{};
     QLabel             *m_statusLabel{};
     QString             m_lastStatusContent;
 

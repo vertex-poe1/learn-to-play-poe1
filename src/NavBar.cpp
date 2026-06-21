@@ -2,6 +2,7 @@
 
 #include <QMouseEvent>
 #include <QPainter>
+#include <QSvgRenderer>
 
 NavBar::NavBar(const QStringList &labels, QWidget *parent)
     : QWidget(parent), m_labels(labels)
@@ -15,6 +16,14 @@ void NavBar::setCurrentIndex(int index)
     m_current = index;
     update();
     emit currentChanged(index);
+}
+
+void NavBar::setGearActive(bool active)
+{
+    if (m_gearActive == active)
+        return;
+    m_gearActive = active;
+    update();
 }
 
 QSize NavBar::sizeHint() const
@@ -33,9 +42,10 @@ void NavBar::paintEvent(QPaintEvent *)
     const int n = m_labels.size();
     if (n == 0) return;
 
-    const int colW = w / n;
+    const int tabAreaW = w - k_gearWidth;
+    const int colW     = tabAreaW / n;
     const int separatorH = 3;
-    const int underlineH = 6;
+    const int underlineH = 8;
 
     p.fillRect(rect(), palette().window());
 
@@ -46,10 +56,10 @@ void NavBar::paintEvent(QPaintEvent *)
     f.setPointSizeF(font().pointSizeF() * 2.0);
 
     for (int i = 0; i < n; ++i) {
-        const int x = i * colW;
-        const int cw = (i == n - 1) ? w - x : colW;
+        const int x  = i * colW;
+        const int cw = (i == n - 1) ? tabAreaW - x : colW;
         const QRect cell(x, 0, cw, h - separatorH);
-        const bool active = (i == m_current);
+        const bool active = (i == m_current) && !m_gearActive;
 
         f.setBold(active);
         p.setFont(f);
@@ -62,12 +72,46 @@ void NavBar::paintEvent(QPaintEvent *)
                        palette().highlight().color());
         }
     }
+
+    // Gear icon
+    const QColor gearColor = m_gearActive ? palette().windowText().color()
+                                          : palette().placeholderText().color();
+    const int cellH   = h - separatorH;
+    const int iconSize = QFontMetrics(f).height() - 6;
+    const int iconX    = tabAreaW + (k_gearWidth - iconSize) / 2;
+    const int iconY    = (cellH - iconSize) / 2;
+
+    const qreal dpr = devicePixelRatioF();
+    QPixmap gearPix(qRound(iconSize * dpr), qRound(iconSize * dpr));
+    gearPix.setDevicePixelRatio(dpr);
+    gearPix.fill(Qt::transparent);
+    {
+        QPainter gp(&gearPix);
+        QSvgRenderer(QString(m_gearActive ? ":/icons/gear-fill.svg" : ":/icons/gear.svg")).render(&gp);
+    }
+    {
+        QPainter tp(&gearPix);
+        tp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        tp.fillRect(gearPix.rect(), gearColor);
+    }
+    p.drawPixmap(iconX, iconY, gearPix);
+
+    if (m_gearActive) {
+        p.fillRect(tabAreaW, h - separatorH - underlineH, k_gearWidth, underlineH,
+                   palette().highlight().color());
+    }
 }
 
 void NavBar::mousePressEvent(QMouseEvent *event)
 {
+    const int x = static_cast<int>(event->position().x());
+    if (x >= width() - k_gearWidth) {
+        emit settingsClicked();
+        return;
+    }
     const int n = m_labels.size();
     if (n == 0) return;
-    const int col = qBound(0, static_cast<int>(event->position().x() * n / width()), n - 1);
+    const int tabAreaW = width() - k_gearWidth;
+    const int col = qBound(0, x * n / tabAreaW, n - 1);
     setCurrentIndex(col);
 }
