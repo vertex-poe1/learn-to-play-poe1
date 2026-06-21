@@ -200,9 +200,22 @@ public:
     using QComboBox::QComboBox;
     void showPopup() override
     {
-        if (auto *w = window())
-            view()->setMaximumHeight(w->height());
+        QWidget *win = window();
+        if (win)
+            view()->setMaximumHeight(win->height());
         QComboBox::showPopup();
+        // Qt sizes the popup container independently of the view; clamp it too.
+        if (win) {
+            if (QWidget *container = view()->parentWidget()) {
+                QRect geo    = container->geometry();
+                QRect winGeo = win->geometry();
+                if (geo.bottom() > winGeo.bottom())
+                    geo.setBottom(winGeo.bottom());
+                if (geo.top() < winGeo.top())
+                    geo.setTop(winGeo.top());
+                container->setGeometry(geo);
+            }
+        }
     }
 };
 
