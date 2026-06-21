@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QHash>
 
 static constexpr int kDbVersion = 3;
 
@@ -523,6 +524,43 @@ QStringList Database::fetchWhisperPartners() const
     while (sqlite3_step(stmt) == SQLITE_ROW)
         result << QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)));
     sqlite3_finalize(stmt);
+    return result;
+}
+
+QList<Database::PartnerRecord> Database::fetchWhisperPartnersWithDates() const
+{
+    if (!m_db) return {};
+
+    // Pass 1: partners in most-recently-active order.
+    sqlite3_stmt *stmt = nullptr;
+    sqlite3_prepare_v2(m_db,
+        "SELECT player_name FROM whispers "
+        "GROUP BY player_name ORDER BY MAX(occurred_at) DESC;",
+        -1, &stmt, nullptr);
+
+    QStringList ordered;
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+        ordered << QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)));
+    sqlite3_finalize(stmt);
+
+    // Pass 2: all distinct (player, date) pairs, most-recent date first per player.
+    sqlite3_prepare_v2(m_db,
+        "SELECT DISTINCT player_name, date(occurred_at) "
+        "FROM whispers ORDER BY player_name ASC, date(occurred_at) DESC;",
+        -1, &stmt, nullptr);
+
+    QHash<QString, QStringList> dateMap;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const QString nm = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)));
+        const QString dt = QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)));
+        dateMap[nm] << dt;
+    }
+    sqlite3_finalize(stmt);
+
+    QList<PartnerRecord> result;
+    result.reserve(ordered.size());
+    for (const QString &nm : ordered)
+        result << PartnerRecord{nm, dateMap.value(nm)};
     return result;
 }
 

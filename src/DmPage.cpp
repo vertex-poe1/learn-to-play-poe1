@@ -3,16 +3,20 @@
 #include "LiveEvent.h"
 #include "LiveEventBus.h"
 
-#include <QAbstractItemView>
-#include <QComboBox>
+#include <functional>
+#include <QDate>
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QFrame>
+#include <QLocale>
+#include <QMap>
+#include <QMenu>
 #include <QPainter>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSet>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -192,32 +196,54 @@ private:
     bool    m_showName;
 };
 
-// ---- BoundedComboBox --------------------------------------------------------
+// ---- Filter menu helpers ----------------------------------------------------
 
-class BoundedComboBox : public QComboBox
+static constexpr int kAlphaThreshold = 100;
+
+// Adds names to parent as a flat list (<=kAlphaThreshold and !alwaysAlpha) or
+// as sym + A–Z submenus. Empty letter submenus are shown grayed out.
+static void addNamesToMenu(QMenu *parent, const QStringList &names,
+                           bool alwaysAlpha,
+                           const std::function<void(const QString &)> &onSelect)
 {
-public:
-    using QComboBox::QComboBox;
-    void showPopup() override
-    {
-        QWidget *win = window();
-        if (win)
-            view()->setMaximumHeight(win->height());
-        QComboBox::showPopup();
-        // Qt sizes the popup container independently of the view; clamp it too.
-        if (win) {
-            if (QWidget *container = view()->parentWidget()) {
-                QRect geo    = container->geometry();
-                QRect winGeo = win->geometry();
-                if (geo.bottom() > winGeo.bottom())
-                    geo.setBottom(winGeo.bottom());
-                if (geo.top() < winGeo.top())
-                    geo.setTop(winGeo.top());
-                container->setGeometry(geo);
-            }
+    if (!alwaysAlpha && names.size() <= kAlphaThreshold) {
+        for (const QString &name : names)
+            parent->addAction(name, [name, onSelect] { onSelect(name); });
+        return;
+    }
+
+    QStringList syms;
+    QMap<QChar, QStringList> byLetter;
+    for (const QString &name : names) {
+        if (name.isEmpty()) continue;
+        if (!name[0].isLetter())
+            syms << name;
+        else
+            byLetter[name[0].toUpper()] << name;
+    }
+
+    // sym submenu
+    QMenu *symMenu = parent->addMenu("sym");
+    if (syms.isEmpty()) {
+        symMenu->menuAction()->setEnabled(false);
+    } else {
+        for (const QString &name : syms)
+            symMenu->addAction(name, [name, onSelect] { onSelect(name); });
+    }
+
+    // A–Z submenus
+    for (char c = 'A'; c <= 'Z'; ++c) {
+        const QChar letter(c);
+        const QStringList lnames = byLetter.value(letter);
+        QMenu *letMenu = parent->addMenu(QString(letter));
+        if (lnames.isEmpty()) {
+            letMenu->menuAction()->setEnabled(false);
+        } else {
+            for (const QString &name : lnames)
+                letMenu->addAction(name, [name, onSelect] { onSelect(name); });
         }
     }
-};
+}
 
 // ---- DmPage ----------------------------------------------------------------
 
@@ -225,8 +251,8 @@ DmPage::DmPage(Database *db, QWidget *parent)
     : QWidget(parent)
     , m_db(db)
 {
-    m_filter = new BoundedComboBox(this);
-    m_filter->addItem("All conversations");
+    m_filterBtn = new QPushButton("All conversations", this);
+    connect(m_filterBtn, &QPushButton::clicked, this, &DmPage::showFilterMenu);
 
     m_scroll = new QScrollArea(this);
     m_scroll->setWidgetResizable(true);
@@ -235,7 +261,7 @@ DmPage::DmPage(Database *db, QWidget *parent)
     auto *vbox = new QVBoxLayout(this);
     vbox->setContentsMargins(0, 4, 0, 0);
     vbox->setSpacing(4);
-    vbox->addWidget(m_filter);
+    vbox->addWidget(m_filterBtn);
     vbox->addWidget(m_scroll, 1);
 
     m_content = new QWidget;
@@ -243,15 +269,11 @@ DmPage::DmPage(Database *db, QWidget *parent)
     m_contentLayout->addStretch(1);
     m_scroll->setWidget(m_content);
 
-    connect(m_filter, &QComboBox::currentIndexChanged,
-            this, &DmPage::onFilterChanged);
-
     m_liveRebuildTimer = new QTimer(this);
     m_liveRebuildTimer->setSingleShot(true);
     m_liveRebuildTimer->setInterval(300);
     connect(m_liveRebuildTimer, &QTimer::timeout, this, [this] {
         if (!isVisible()) { m_dirty = true; return; }
-        populateFilter();
         rebuild();
         if (m_liveRebuildScrollToBottom)
             QTimer::singleShot(0, this, &DmPage::scrollToBottom);
@@ -270,7 +292,6 @@ void DmPage::reload()
 {
     m_dirty = false;
     m_limit = 100;
-    populateFilter();
     rebuild();
     QTimer::singleShot(0, this, &DmPage::scrollToBottom);
 }
@@ -300,11 +321,109 @@ void DmPage::onLiveWhisper(const LiveEvent &event)
     m_liveRebuildTimer->start(); // restarts the 300 ms window on every event
 }
 
-void DmPage::onFilterChanged(int /*index*/)
+void DmPage::onPlayerSelected(const QString &name)
 {
+    if (m_filterPlayer == name) return;
+    m_filterPlayer = name;
+    m_filterBtn->setText(name.isEmpty() ? "All conversations" : name);
     m_limit = 100;
     rebuild();
     QTimer::singleShot(0, this, &DmPage::scrollToBottom);
+}
+
+void DmPage::showFilterMenu()
+{
+    if (!m_db) return;
+
+    const auto partners = m_db->fetchWhisperPartnersWithDates();
+    const QDate today   = QDate::currentDate();
+
+    QMenu menu(this);
+
+    // "All conversations" resets the filter
+    QAction *allAct = menu.addAction("All conversations");
+    connect(allAct, &QAction::triggered, this, [this] { onPlayerSelected({}); });
+
+    menu.addSeparator();
+
+    // ---- Time bucket definitions (ISO date strings for fast string comparison) ----
+    const QString todayStr  = today.toString(Qt::ISODate);
+    const QString yestStr   = today.addDays(-1).toString(Qt::ISODate);
+    const int     dow       = today.dayOfWeek();           // 1=Mon..7=Sun
+    const QDate   sowDate   = today.addDays(1 - dow);      // Monday of this week
+    const QString sowStr    = sowDate.toString(Qt::ISODate);
+    const QString slwStr    = sowDate.addDays(-7).toString(Qt::ISODate);
+    const QString elwStr    = sowDate.addDays(-1).toString(Qt::ISODate);
+    const QString somStr    = QDate(today.year(), today.month(), 1).toString(Qt::ISODate);
+
+    struct Bucket { QString label; QString from, to; };
+    QList<Bucket> buckets;
+    buckets << Bucket{"Today",      todayStr, todayStr};
+    buckets << Bucket{"Yesterday",  yestStr,  yestStr};
+    buckets << Bucket{"This Week",  sowStr,   todayStr};
+    buckets << Bucket{"Last Week",  slwStr,   elwStr};
+    buckets << Bucket{"This Month", somStr,   todayStr};
+
+    // Previous months of this year
+    const QLocale locale;
+    for (int m = today.month() - 1; m >= 1; --m) {
+        const QDate first = QDate(today.year(), m, 1);
+        const QDate last  = first.addMonths(1).addDays(-1);
+        buckets << Bucket{locale.standaloneMonthName(m),
+                          first.toString(Qt::ISODate),
+                          last.toString(Qt::ISODate)};
+    }
+
+    // Previous years present in the data
+    QSet<int> years;
+    for (const auto &p : partners)
+        for (const QString &d : p.dates)
+            years.insert(d.left(4).toInt());
+    years.remove(today.year());
+
+    QList<int> sortedYears = years.values();
+    std::sort(sortedYears.begin(), sortedYears.end(), std::greater<int>());
+    for (int y : sortedYears) {
+        buckets << Bucket{QString::number(y),
+                          QStringLiteral("%1-01-01").arg(y),
+                          QStringLiteral("%1-12-31").arg(y)};
+    }
+
+    // ---- Add a submenu for each non-empty time bucket ----
+    for (const Bucket &b : buckets) {
+        QStringList names;
+        for (const auto &p : partners) {
+            for (const QString &d : p.dates) {
+                if (d >= b.from && d <= b.to) {
+                    names << p.name;
+                    break;
+                }
+            }
+        }
+        if (names.isEmpty()) continue;
+
+        names.sort(Qt::CaseInsensitive);
+        QMenu *sub = menu.addMenu(b.label);
+        addNamesToMenu(sub, names, false,
+                       [this](const QString &n) { onPlayerSelected(n); });
+    }
+
+    menu.addSeparator();
+
+    // ---- "All" submenu: always uses sym + A–Z structure ----
+    {
+        QStringList allNames;
+        allNames.reserve(partners.size());
+        for (const auto &p : partners)
+            allNames << p.name;
+        allNames.sort(Qt::CaseInsensitive);
+
+        QMenu *allMenu = menu.addMenu("All");
+        addNamesToMenu(allMenu, allNames, true,
+                       [this](const QString &n) { onPlayerSelected(n); });
+    }
+
+    menu.exec(m_filterBtn->mapToGlobal(QPoint(0, m_filterBtn->height())));
 }
 
 void DmPage::rebuild()
@@ -313,12 +432,9 @@ void DmPage::rebuild()
 
     QElapsedTimer t; t.start();
 
-    const QString filterPlayer = m_filter->currentIndex() > 0
-                                     ? m_filter->currentText()
-                                     : QString{};
-    const bool showNames = filterPlayer.isEmpty();
+    const bool showNames = m_filterPlayer.isEmpty();
 
-    const QList<Database::WhisperRecord> whispers = m_db->fetchWhispers(filterPlayer, m_limit);
+    const QList<Database::WhisperRecord> whispers = m_db->fetchWhispers(m_filterPlayer, m_limit);
     qDebug() << "[DmPage] fetchWhispers returned" << whispers.size() << "rows in" << t.elapsed() << "ms";
 
     // Build content widget fully before handing it to the scroll area so that
@@ -360,27 +476,6 @@ void DmPage::rebuild()
     m_contentLayout = contentLayout;
     m_scroll->setWidget(m_content);
     qDebug() << "[DmPage] rebuild done in" << t.elapsed() << "ms";
-}
-
-void DmPage::populateFilter()
-{
-    if (!m_db) return;
-
-    const QString current = m_filter->currentIndex() > 0
-                                ? m_filter->currentText()
-                                : QString{};
-
-    m_filter->blockSignals(true);
-    m_filter->clear();
-    m_filter->addItem("All conversations");
-    for (const QString &name : m_db->fetchWhisperPartners())
-        m_filter->addItem(name);
-
-    if (!current.isEmpty()) {
-        const int idx = m_filter->findText(current);
-        m_filter->setCurrentIndex(idx >= 0 ? idx : 0);
-    }
-    m_filter->blockSignals(false);
 }
 
 void DmPage::scrollToBottom()

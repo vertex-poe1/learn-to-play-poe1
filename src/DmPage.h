@@ -5,7 +5,7 @@
 
 class Database;
 class LiveEvent;
-class QComboBox;
+class QPushButton;
 class QScrollArea;
 class QVBoxLayout;
 
@@ -25,15 +25,16 @@ protected:
     void showEvent(QShowEvent *e) override;
 
 private slots:
-    void onFilterChanged(int index);
+    void onPlayerSelected(const QString &name);
 
 private:
     void rebuild();
-    void populateFilter();
+    void showFilterMenu();
     void scrollToBottom();
 
     Database    *m_db{};
-    QComboBox   *m_filter{};
+    QPushButton *m_filterBtn{};
+    QString      m_filterPlayer;
     QScrollArea *m_scroll{};
     QWidget     *m_content{};
     QVBoxLayout *m_contentLayout{};

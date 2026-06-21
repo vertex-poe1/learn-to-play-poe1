@@ -31,6 +31,11 @@ public:
         QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
     };
 
+    struct PartnerRecord {
+        QString     name;
+        QStringList dates; // distinct "YYYY-MM-DD" values, most-recent first
+    };
+
     // Inserts the install path if new; returns current state either way.
     InstallState upsertInstall(const QString &installPath);
 
@@ -40,6 +45,10 @@ public:
 
     // Returns distinct whisper partner names, ordered by most-recent message.
     QStringList fetchWhisperPartners() const;
+
+    // Returns partners ordered by most-recent activity, each with their distinct
+    // active dates (YYYY-MM-DD), most-recent first. Used for the filter menu buckets.
+    QList<PartnerRecord> fetchWhisperPartnersWithDates() const;
 
 private:
     void applyPragmas();
