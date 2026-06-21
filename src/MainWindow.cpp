@@ -52,7 +52,6 @@ MainWindow::MainWindow(QWidget *parent)
     currentLayout->setContentsMargins(0, 0, 0, 0);
     currentLayout->setSpacing(0);
     currentLayout->addWidget(m_log, 1);
-    currentLayout->addWidget(m_taskPanel, 0);
 
     m_stack = new QStackedWidget(this);
     m_dmPage = new DmPage(nullptr, this);
@@ -73,6 +72,7 @@ MainWindow::MainWindow(QWidget *parent)
     vbox->setSpacing(0);
     vbox->addWidget(m_navBar);
     vbox->addWidget(m_stack, 1);
+    vbox->addWidget(m_taskPanel, 0);
     setCentralWidget(container);
 
     qDebug() << "[startup] UI built in" << startupTimer.elapsed() << "ms";
@@ -359,8 +359,10 @@ void MainWindow::onTaskUpdated(int id)
         if (r.id != id) continue;
         const QString t = QTime::currentTime().toString("HH:mm");
         if (r.status == TaskStatus::Finished) {
-            const QString label = r.name.startsWith("Ingest ") ? "Logs parsed" : r.name;
-            setStatusContent(QStringLiteral("%1 · %2").arg(t, label));
+            if (r.name.startsWith("Ingest "))
+                setStatusContent(QString());   // let idle message take over
+            else
+                setStatusContent(QStringLiteral("%1 · %2").arg(t, r.name));
         } else if (r.status == TaskStatus::Failed) {
             setStatusContent(QStringLiteral("%1 · Failed").arg(t));
         } else if (r.status == TaskStatus::Cancelled) {
@@ -379,7 +381,7 @@ void MainWindow::setStatusContent(const QString &content)
 void MainWindow::refreshStatusBar()
 {
     if (!m_gameFound) {
-        const QString prefix = "Waiting for game window";
+        const QString prefix = "Waiting for new game info";
         m_statusLabel->setText(m_lastStatusContent.isEmpty()
             ? prefix
             : prefix + " · " + m_lastStatusContent);

@@ -7,16 +7,19 @@
 #include <QDate>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QEnterEvent>
 #include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QLocale>
 #include <QMap>
-#include <QMenu>
 #include <QPainter>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSet>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -196,54 +199,109 @@ private:
     bool    m_showName;
 };
 
-// ---- Filter menu helpers ----------------------------------------------------
+// ---- Filter panel helpers ---------------------------------------------------
 
 static constexpr int kAlphaThreshold = 100;
 
-// Adds names to parent as a flat list (<=kAlphaThreshold and !alwaysAlpha) or
-// as sym + A–Z submenus. Empty letter submenus are shown grayed out.
-static void addNamesToMenu(QMenu *parent, const QStringList &names,
-                           bool alwaysAlpha,
-                           const std::function<void(const QString &)> &onSelect)
+struct BucketDef {
+    QString label;
+    QString from;
+    QString to;
+};
+
+// Builds the ordered list of time buckets, including year buckets derived from
+// the partner data.
+static QList<BucketDef> makeBuckets(const QDate &today,
+                                     const QList<Database::PartnerRecord> &partners)
 {
-    if (!alwaysAlpha && names.size() <= kAlphaThreshold) {
-        for (const QString &name : names)
-            parent->addAction(name, [name, onSelect] { onSelect(name); });
-        return;
+    QList<BucketDef> buckets;
+    const QString todayStr = today.toString(Qt::ISODate);
+    const QString yestStr  = today.addDays(-1).toString(Qt::ISODate);
+    const int     dow      = today.dayOfWeek();
+    const QDate   sowDate  = today.addDays(1 - dow);
+    const QString sowStr   = sowDate.toString(Qt::ISODate);
+    const QString slwStr   = sowDate.addDays(-7).toString(Qt::ISODate);
+    const QString elwStr   = sowDate.addDays(-1).toString(Qt::ISODate);
+    const QString somStr   = QDate(today.year(), today.month(), 1).toString(Qt::ISODate);
+
+    buckets << BucketDef{"Today",      todayStr, todayStr};
+    buckets << BucketDef{"Yesterday",  yestStr,  yestStr};
+    buckets << BucketDef{"This Week",  sowStr,   todayStr};
+    buckets << BucketDef{"Last Week",  slwStr,   elwStr};
+    buckets << BucketDef{"This Month", somStr,   todayStr};
+
+    const QLocale locale;
+    for (int m = today.month() - 1; m >= 1; --m) {
+        const QDate first = QDate(today.year(), m, 1);
+        const QDate last  = first.addMonths(1).addDays(-1);
+        buckets << BucketDef{locale.standaloneMonthName(m),
+                             first.toString(Qt::ISODate),
+                             last.toString(Qt::ISODate)};
     }
 
-    QStringList syms;
-    QMap<QChar, QStringList> byLetter;
-    for (const QString &name : names) {
-        if (name.isEmpty()) continue;
-        if (!name[0].isLetter())
-            syms << name;
-        else
-            byLetter[name[0].toUpper()] << name;
-    }
-
-    // sym submenu
-    QMenu *symMenu = parent->addMenu("sym");
-    if (syms.isEmpty()) {
-        symMenu->menuAction()->setEnabled(false);
-    } else {
-        for (const QString &name : syms)
-            symMenu->addAction(name, [name, onSelect] { onSelect(name); });
-    }
-
-    // A–Z submenus
-    for (char c = 'A'; c <= 'Z'; ++c) {
-        const QChar letter(c);
-        const QStringList lnames = byLetter.value(letter);
-        QMenu *letMenu = parent->addMenu(QString(letter));
-        if (lnames.isEmpty()) {
-            letMenu->menuAction()->setEnabled(false);
-        } else {
-            for (const QString &name : lnames)
-                letMenu->addAction(name, [name, onSelect] { onSelect(name); });
-        }
-    }
+    QSet<int> years;
+    for (const auto &p : partners)
+        for (const QString &d : p.dates)
+            years.insert(d.left(4).toInt());
+    years.remove(today.year());
+    QList<int> sortedYears = years.values();
+    std::sort(sortedYears.begin(), sortedYears.end(), std::greater<int>());
+    for (int y : sortedYears)
+        buckets << BucketDef{QString::number(y),
+                             QStringLiteral("%1-01-01").arg(y),
+                             QStringLiteral("%1-12-31").arg(y)};
+    return buckets;
 }
+
+static QStringList namesInBucket(const QList<Database::PartnerRecord> &partners,
+                                  const BucketDef &b)
+{
+    QStringList names;
+    for (const auto &p : partners)
+        for (const QString &d : p.dates)
+            if (d >= b.from && d <= b.to) { names << p.name; break; }
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+static QStringList namesForLetter(const QStringList &names, const QString &letter)
+{
+    QStringList result;
+    const bool isSym = (letter == "sym");
+    const QChar ch   = isSym ? QChar() : letter[0].toUpper();
+    for (const QString &n : names) {
+        if (n.isEmpty()) continue;
+        if (isSym ? !n[0].isLetter() : n[0].toUpper() == ch)
+            result << n;
+    }
+    return result;
+}
+
+// Scrolls a QScrollArea while the mouse hovers over the button.
+class ScrollArrowButton : public QPushButton
+{
+public:
+    ScrollArrowButton(const QString &text, int dir, QScrollArea *target, QWidget *parent)
+        : QPushButton(text, parent), m_dir(dir), m_target(target)
+    {
+        setFlat(true);
+        m_timer = new QTimer(this);
+        m_timer->setInterval(50);
+        connect(m_timer, &QTimer::timeout, this, [this] {
+            auto *sb = m_target->verticalScrollBar();
+            sb->setValue(sb->value() + m_dir * 30);
+        });
+    }
+
+protected:
+    void enterEvent(QEnterEvent *e) override { QPushButton::enterEvent(e); m_timer->start(); }
+    void leaveEvent(QEvent    *e) override { QPushButton::leaveEvent(e); m_timer->stop();  }
+
+private:
+    int          m_dir;
+    QScrollArea *m_target;
+    QTimer      *m_timer{};
+};
 
 // ---- DmPage ----------------------------------------------------------------
 
@@ -251,24 +309,93 @@ DmPage::DmPage(Database *db, QWidget *parent)
     : QWidget(parent)
     , m_db(db)
 {
-    m_filterBtn = new QPushButton("All conversations", this);
-    connect(m_filterBtn, &QPushButton::clicked, this, &DmPage::showFilterMenu);
+    // ---- Filter header button -----------------------------------------------
+    m_filterBtn = new QPushButton("All conversations — click to filter", this);
+    m_filterBtn->setFlat(true);
+    m_filterBtn->setStyleSheet("QPushButton { text-align: left; padding: 4px 8px; }");
+    connect(m_filterBtn, &QPushButton::clicked, this, &DmPage::openFilterPanel);
 
+    // ---- Conversation scroll area -------------------------------------------
     m_scroll = new QScrollArea(this);
     m_scroll->setWidgetResizable(true);
     m_scroll->setFrameShape(QFrame::NoFrame);
-
-    auto *vbox = new QVBoxLayout(this);
-    vbox->setContentsMargins(0, 4, 0, 0);
-    vbox->setSpacing(4);
-    vbox->addWidget(m_filterBtn);
-    vbox->addWidget(m_scroll, 1);
 
     m_content = new QWidget;
     m_contentLayout = new QVBoxLayout(m_content);
     m_contentLayout->addStretch(1);
     m_scroll->setWidget(m_content);
 
+    // ---- Filter panel -------------------------------------------------------
+    m_filterPanel = new QWidget(this);
+    {
+        // Scroll area is created first so arrow buttons can reference it.
+        m_filterScroll = new QScrollArea(m_filterPanel);
+        m_filterScroll->setWidgetResizable(true);
+        m_filterScroll->setFrameShape(QFrame::NoFrame);
+        m_filterScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_filterScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+        m_filterListWidget = new QWidget;
+        m_filterListLayout = new QVBoxLayout(m_filterListWidget);
+        m_filterListLayout->setContentsMargins(0, 0, 0, 0);
+        m_filterListLayout->setSpacing(0);
+        m_filterScroll->setWidget(m_filterListWidget);
+
+        auto *upBtn   = new ScrollArrowButton("▲", -1, m_filterScroll, m_filterPanel);
+        auto *downBtn = new ScrollArrowButton("▼",  1, m_filterScroll, m_filterPanel);
+
+        // Header row: back button + title label
+        auto *header = new QWidget(m_filterPanel);
+        auto *hbox   = new QHBoxLayout(header);
+        hbox->setContentsMargins(4, 4, 4, 4);
+        hbox->setSpacing(8);
+
+        m_backBtn = new QPushButton("← Back", header);
+        m_backBtn->setFlat(true);
+        connect(m_backBtn, &QPushButton::clicked, this, [this] {
+            if (m_filterPath.isEmpty())
+                m_view->setCurrentIndex(0);
+            else {
+                m_filterPath.removeLast();
+                refreshFilterPanel();
+                m_filterScroll->verticalScrollBar()->setValue(0);
+            }
+        });
+
+        m_filterTitle = new QLabel(header);
+        QFont f = m_filterTitle->font();
+        f.setBold(true);
+        m_filterTitle->setFont(f);
+
+        hbox->addWidget(m_backBtn);
+        hbox->addWidget(m_filterTitle, 1);
+
+        auto *headerSep = new QFrame(m_filterPanel);
+        headerSep->setFrameShape(QFrame::HLine);
+        headerSep->setFrameShadow(QFrame::Sunken);
+
+        auto *vbox = new QVBoxLayout(m_filterPanel);
+        vbox->setContentsMargins(0, 0, 0, 0);
+        vbox->setSpacing(0);
+        vbox->addWidget(header);
+        vbox->addWidget(headerSep);
+        vbox->addWidget(upBtn);
+        vbox->addWidget(m_filterScroll, 1);
+        vbox->addWidget(downBtn);
+    }
+
+    // ---- Stacked view: page 0 = conversations, page 1 = filter panel --------
+    m_view = new QStackedWidget(this);
+    m_view->addWidget(m_scroll);
+    m_view->addWidget(m_filterPanel);
+
+    auto *vbox = new QVBoxLayout(this);
+    vbox->setContentsMargins(0, 4, 0, 0);
+    vbox->setSpacing(4);
+    vbox->addWidget(m_filterBtn);
+    vbox->addWidget(m_view, 1);
+
+    // ---- Live rebuild timer -------------------------------------------------
     m_liveRebuildTimer = new QTimer(this);
     m_liveRebuildTimer->setSingleShot(true);
     m_liveRebuildTimer->setInterval(300);
@@ -312,118 +439,170 @@ void DmPage::onLiveWhisper(const LiveEvent &event)
         return;
     }
 
-    // Capture scroll position at the leading edge of each burst so we know
-    // whether to auto-scroll after the debounced rebuild fires.
     if (!m_liveRebuildTimer->isActive())
         m_liveRebuildScrollToBottom = m_scroll->verticalScrollBar()->value()
                                       >= m_scroll->verticalScrollBar()->maximum() - 4;
 
-    m_liveRebuildTimer->start(); // restarts the 300 ms window on every event
+    m_liveRebuildTimer->start();
 }
 
 void DmPage::onPlayerSelected(const QString &name)
 {
     if (m_filterPlayer == name) return;
     m_filterPlayer = name;
-    m_filterBtn->setText(name.isEmpty() ? "All conversations" : name);
+    if (name.isEmpty())
+        m_filterBtn->setText("All conversations — click to filter");
+    else
+        m_filterBtn->setText(
+            QStringLiteral("Showing conversation with %1 — click to change filter").arg(name));
     m_limit = 100;
     rebuild();
     QTimer::singleShot(0, this, &DmPage::scrollToBottom);
 }
 
-void DmPage::showFilterMenu()
+void DmPage::openFilterPanel()
 {
     if (!m_db) return;
+    m_cachedPartners = m_db->fetchWhisperPartnersWithDates();
+    m_filterPath.clear();
+    refreshFilterPanel();
+    m_filterScroll->verticalScrollBar()->setValue(0);
+    m_view->setCurrentIndex(1);
+}
 
-    const auto partners = m_db->fetchWhisperPartnersWithDates();
-    const QDate today   = QDate::currentDate();
+void DmPage::refreshFilterPanel()
+{
+    // Replace the list widget so Qt cleans up old rows automatically.
+    auto *listWidget = new QWidget;
+    auto *listLayout = new QVBoxLayout(listWidget);
+    listLayout->setContentsMargins(0, 0, 0, 0);
+    listLayout->setSpacing(0);
 
-    QMenu menu(this);
+    const auto addRow = [&](const QString &text, bool drill, std::function<void()> fn) {
+        auto *btn = new QPushButton(text + (drill ? "  ›" : ""), listWidget);
+        btn->setFlat(true);
+        btn->setMinimumHeight(40);
+        btn->setStyleSheet("QPushButton { text-align: left; padding: 4px 12px; }");
+        QObject::connect(btn, &QPushButton::clicked, this, std::move(fn));
+        listLayout->addWidget(btn);
+    };
 
-    // "All conversations" resets the filter
-    QAction *allAct = menu.addAction("All conversations");
-    connect(allAct, &QAction::triggered, this, [this] { onPlayerSelected({}); });
+    const auto addSep = [&]() {
+        auto *line = new QFrame(listWidget);
+        line->setFrameShape(QFrame::HLine);
+        line->setFrameShadow(QFrame::Sunken);
+        listLayout->addWidget(line);
+    };
 
-    menu.addSeparator();
+    // ---- Root level ---------------------------------------------------------
+    if (m_filterPath.isEmpty()) {
+        m_filterTitle->setText("Select filter");
 
-    // ---- Time bucket definitions (ISO date strings for fast string comparison) ----
-    const QString todayStr  = today.toString(Qt::ISODate);
-    const QString yestStr   = today.addDays(-1).toString(Qt::ISODate);
-    const int     dow       = today.dayOfWeek();           // 1=Mon..7=Sun
-    const QDate   sowDate   = today.addDays(1 - dow);      // Monday of this week
-    const QString sowStr    = sowDate.toString(Qt::ISODate);
-    const QString slwStr    = sowDate.addDays(-7).toString(Qt::ISODate);
-    const QString elwStr    = sowDate.addDays(-1).toString(Qt::ISODate);
-    const QString somStr    = QDate(today.year(), today.month(), 1).toString(Qt::ISODate);
+        addRow("All conversations", false, [this] { filterLeafSelected({}); });
+        addSep();
 
-    struct Bucket { QString label; QString from, to; };
-    QList<Bucket> buckets;
-    buckets << Bucket{"Today",      todayStr, todayStr};
-    buckets << Bucket{"Yesterday",  yestStr,  yestStr};
-    buckets << Bucket{"This Week",  sowStr,   todayStr};
-    buckets << Bucket{"Last Week",  slwStr,   elwStr};
-    buckets << Bucket{"This Month", somStr,   todayStr};
+        const QList<BucketDef> buckets = makeBuckets(QDate::currentDate(), m_cachedPartners);
+        for (const BucketDef &b : buckets) {
+            const QStringList names = namesInBucket(m_cachedPartners, b);
+            if (names.isEmpty()) continue;
+            const QString label = QStringLiteral("%1  (%2)").arg(b.label).arg(names.size());
+            addRow(label, true, [this, blabel = b.label] {
+                m_filterPath.append(blabel);
+                refreshFilterPanel();
+                m_filterScroll->verticalScrollBar()->setValue(0);
+            });
+        }
 
-    // Previous months of this year
-    const QLocale locale;
-    for (int m = today.month() - 1; m >= 1; --m) {
-        const QDate first = QDate(today.year(), m, 1);
-        const QDate last  = first.addMonths(1).addDays(-1);
-        buckets << Bucket{locale.standaloneMonthName(m),
-                          first.toString(Qt::ISODate),
-                          last.toString(Qt::ISODate)};
+        addSep();
+
+        const int total = m_cachedPartners.size();
+        addRow(QStringLiteral("All  (%1)").arg(total), true, [this] {
+            m_filterPath.append("All");
+            refreshFilterPanel();
+            m_filterScroll->verticalScrollBar()->setValue(0);
+        });
     }
+    // ---- Bucket or "All" level ----------------------------------------------
+    else if (m_filterPath.size() == 1) {
+        const QString &step = m_filterPath[0];
+        m_filterTitle->setText(step);
 
-    // Previous years present in the data
-    QSet<int> years;
-    for (const auto &p : partners)
-        for (const QString &d : p.dates)
-            years.insert(d.left(4).toInt());
-    years.remove(today.year());
-
-    QList<int> sortedYears = years.values();
-    std::sort(sortedYears.begin(), sortedYears.end(), std::greater<int>());
-    for (int y : sortedYears) {
-        buckets << Bucket{QString::number(y),
-                          QStringLiteral("%1-01-01").arg(y),
-                          QStringLiteral("%1-12-31").arg(y)};
-    }
-
-    // ---- Add a submenu for each non-empty time bucket ----
-    for (const Bucket &b : buckets) {
         QStringList names;
-        for (const auto &p : partners) {
-            for (const QString &d : p.dates) {
-                if (d >= b.from && d <= b.to) {
-                    names << p.name;
-                    break;
-                }
+        if (step == "All") {
+            for (const auto &p : m_cachedPartners) names << p.name;
+            names.sort(Qt::CaseInsensitive);
+        } else {
+            const QList<BucketDef> buckets = makeBuckets(QDate::currentDate(), m_cachedPartners);
+            for (const BucketDef &b : buckets) {
+                if (b.label == step) { names = namesInBucket(m_cachedPartners, b); break; }
             }
         }
-        if (names.isEmpty()) continue;
 
-        names.sort(Qt::CaseInsensitive);
-        QMenu *sub = menu.addMenu(b.label);
-        addNamesToMenu(sub, names, false,
-                       [this](const QString &n) { onPlayerSelected(n); });
+        if (step != "All" && names.size() <= kAlphaThreshold) {
+            for (const QString &name : names)
+                addRow(name, false, [this, name] { filterLeafSelected(name); });
+        } else {
+            QStringList syms;
+            QMap<QChar, int> letterCounts;
+            for (const QString &name : names) {
+                if (name.isEmpty()) continue;
+                if (!name[0].isLetter()) syms << name;
+                else letterCounts[name[0].toUpper()]++;
+            }
+
+            if (!syms.isEmpty()) {
+                addRow(QStringLiteral("sym  (%1)").arg(syms.size()), true, [this] {
+                    m_filterPath.append("sym");
+                    refreshFilterPanel();
+                    m_filterScroll->verticalScrollBar()->setValue(0);
+                });
+            }
+
+            for (char c = 'A'; c <= 'Z'; ++c) {
+                const QChar letter(c);
+                const int count = letterCounts.value(letter, 0);
+                if (count == 0) continue;
+                addRow(QStringLiteral("%1  (%2)").arg(letter).arg(count), true,
+                       [this, letter] {
+                           m_filterPath.append(QString(letter));
+                           refreshFilterPanel();
+                           m_filterScroll->verticalScrollBar()->setValue(0);
+                       });
+            }
+        }
     }
+    // ---- Letter level -------------------------------------------------------
+    else if (m_filterPath.size() == 2) {
+        const QString &bucket = m_filterPath[0];
+        const QString &letter = m_filterPath[1];
+        m_filterTitle->setText(QStringLiteral("%1  ·  %2").arg(bucket, letter));
 
-    menu.addSeparator();
-
-    // ---- "All" submenu: always uses sym + A–Z structure ----
-    {
         QStringList allNames;
-        allNames.reserve(partners.size());
-        for (const auto &p : partners)
-            allNames << p.name;
+        if (bucket == "All") {
+            for (const auto &p : m_cachedPartners) allNames << p.name;
+        } else {
+            const QList<BucketDef> buckets = makeBuckets(QDate::currentDate(), m_cachedPartners);
+            for (const BucketDef &b : buckets) {
+                if (b.label == bucket) { allNames = namesInBucket(m_cachedPartners, b); break; }
+            }
+        }
         allNames.sort(Qt::CaseInsensitive);
 
-        QMenu *allMenu = menu.addMenu("All");
-        addNamesToMenu(allMenu, allNames, true,
-                       [this](const QString &n) { onPlayerSelected(n); });
+        for (const QString &name : namesForLetter(allNames, letter))
+            addRow(name, false, [this, name] { filterLeafSelected(name); });
     }
 
-    menu.exec(m_filterBtn->mapToGlobal(QPoint(0, m_filterBtn->height())));
+    listLayout->addStretch(1);
+
+    m_filterListWidget = listWidget;
+    m_filterListLayout = listLayout;
+    m_filterScroll->setWidget(listWidget);
+}
+
+void DmPage::filterLeafSelected(const QString &name)
+{
+    m_view->setCurrentIndex(0);
+    onPlayerSelected(name);
 }
 
 void DmPage::rebuild()
@@ -437,8 +616,6 @@ void DmPage::rebuild()
     const QList<Database::WhisperRecord> whispers = m_db->fetchWhispers(m_filterPlayer, m_limit);
     qDebug() << "[DmPage] fetchWhispers returned" << whispers.size() << "rows in" << t.elapsed() << "ms";
 
-    // Build content widget fully before handing it to the scroll area so that
-    // the layout engine only performs one pass instead of N passes (one per addWidget).
     auto *content       = new QWidget;
     auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(8, 8, 8, 8);
@@ -470,7 +647,6 @@ void DmPage::rebuild()
     }
 
     qDebug() << "[DmPage] widgets built in" << t.elapsed() << "ms";
-    // Replace live references and hand the fully-built widget to the scroll area.
     delete m_content;
     m_content       = content;
     m_contentLayout = contentLayout;

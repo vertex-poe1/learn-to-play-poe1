@@ -1,12 +1,16 @@
 #pragma once
 
+#include "Database.h"
 #include <QShowEvent>
+#include <QStringList>
 #include <QWidget>
 
-class Database;
 class LiveEvent;
+class QLabel;
 class QPushButton;
 class QScrollArea;
+class QStackedWidget;
+class QTimer;
 class QVBoxLayout;
 
 class DmPage : public QWidget
@@ -29,7 +33,9 @@ private slots:
 
 private:
     void rebuild();
-    void showFilterMenu();
+    void openFilterPanel();
+    void refreshFilterPanel();
+    void filterLeafSelected(const QString &name);
     void scrollToBottom();
 
     Database    *m_db{};
@@ -42,4 +48,14 @@ private:
     bool         m_liveRebuildScrollToBottom{false};
     bool         m_dirty{true};
     int          m_limit{100};
+
+    QStackedWidget                *m_view{};
+    QWidget                       *m_filterPanel{};
+    QScrollArea                   *m_filterScroll{};
+    QWidget                       *m_filterListWidget{};
+    QVBoxLayout                   *m_filterListLayout{};
+    QLabel                        *m_filterTitle{};
+    QPushButton                   *m_backBtn{};
+    QStringList                    m_filterPath;
+    QList<Database::PartnerRecord> m_cachedPartners;
 };
