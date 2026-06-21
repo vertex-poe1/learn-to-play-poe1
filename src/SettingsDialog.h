@@ -6,6 +6,9 @@
 
 class QCheckBox;
 class ListEditor;
+class QLabel;
+class QPushButton;
+class QStackedWidget;
 
 class SettingsDialog : public QDialog
 {
@@ -18,17 +21,25 @@ signals:
     void configChanged();
 
 private:
+    void navigateTo(int pageIndex, const QString &title);
+    void navigateBack();
     void saveAndEmit();
 
-    AppConfig &m_config;
+    AppConfig      &m_config;
+    QStackedWidget *m_stack{};
+    QPushButton    *m_backBtn{};
+    QLabel         *m_titleLabel{};
 
+    // Game page
     QCheckBox  *m_autoDetect{};
     ListEditor *m_installDirs{};
     ListEditor *m_exeNames{};
     QCheckBox  *m_enableOverlay{};
+
+    // Window page
     QCheckBox  *m_startMinimized{};
     QCheckBox  *m_minimizeToTray{};
-    QCheckBox  *m_autoUpdate{};
-    QCheckBox  *m_autoStartOnBoot{};
+
+    // Chat page
     QCheckBox  *m_showGuildTags{};
 };
