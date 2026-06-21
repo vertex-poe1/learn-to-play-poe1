@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <sqlite3.h>
@@ -36,6 +37,15 @@ public:
         QStringList dates; // distinct "YYYY-MM-DD" values, most-recent first
     };
 
+    struct ChatRecord {
+        QString source;      // "chat" or "dm"
+        QString channel;     // "#", "$", "%", "&", "@from", "@to"
+        QString playerName;
+        QString guildTag;    // may be empty
+        QString message;
+        QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
+    };
+
     // Inserts the install path if new; returns current state either way.
     InstallState upsertInstall(const QString &installPath);
 
@@ -49,6 +59,20 @@ public:
     // Returns partners ordered by most-recent activity, each with their distinct
     // active dates (YYYY-MM-DD), most-recent first. Used for the filter menu buckets.
     QList<PartnerRecord> fetchWhisperPartnersWithDates() const;
+
+    // Returns unified chat+DM records, most recent N rows in chronological order.
+    // channels: which public channel prefixes to include ('#', '$', '%', '&').
+    // includeDms: also include rows from the whispers table.
+    // limit > 0 returns only the most recent N rows.
+    // fromDate/toDate: optional "YYYY-MM-DD" bounds (inclusive).
+    QList<ChatRecord> fetchChats(const QSet<QChar> &channels, bool includeDms,
+                                 int limit = 100,
+                                 const QString &fromDate = {},
+                                 const QString &toDate   = {}) const;
+
+    // Returns distinct dates ("YYYY-MM-DD") that have data for the given filter,
+    // most-recent first. Used to populate the filter panel date buckets.
+    QStringList fetchChatDates(const QSet<QChar> &channels, bool includeDms) const;
 
 private:
     void applyPragmas();

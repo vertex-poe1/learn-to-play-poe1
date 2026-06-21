@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ChatPage.h"
 #include "Database.h"
 #include "DmPage.h"
 #include "GameOverlay.h"
@@ -53,13 +54,14 @@ MainWindow::MainWindow(QWidget *parent)
     currentLayout->setSpacing(0);
     currentLayout->addWidget(m_log, 1);
 
-    m_stack = new QStackedWidget(this);
-    m_dmPage = new DmPage(nullptr, this);
+    m_stack    = new QStackedWidget(this);
+    m_chatPage = new ChatPage(nullptr, this);
+    m_dmPage   = new DmPage(nullptr, this);
 
     m_stack->addWidget(new QWidget()); // Past
     m_stack->addWidget(currentPage);   // Current
-    m_stack->addWidget(new QWidget()); // Chats
-    m_stack->addWidget(m_dmPage);     // DMs
+    m_stack->addWidget(m_chatPage);    // Chats
+    m_stack->addWidget(m_dmPage);      // DMs
 
     m_navBar = new NavBar({"Past", "Current", "Chats", "DMs"}, this);
     m_navBar->setCurrentIndex(1);
@@ -129,6 +131,7 @@ MainWindow::MainWindow(QWidget *parent)
         qDebug() << "[startup] scheduleLogIngestion";
         scheduleLogIngestion();
         qDebug() << "[startup] scheduleLogIngestion done in" << startupTimer.elapsed() << "ms";
+        m_chatPage->setDatabase(m_db);
         m_dmPage->setDatabase(m_db);
     } else {
         log("Database error", "db", m_db->lastError());

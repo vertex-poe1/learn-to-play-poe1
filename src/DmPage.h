@@ -39,6 +39,7 @@ private:
     void scrollToBottom();
 
     Database    *m_db{};
+    QLabel      *m_conversationLabel{};
     QPushButton *m_filterBtn{};
     QString      m_filterPlayer;
     QScrollArea *m_scroll{};

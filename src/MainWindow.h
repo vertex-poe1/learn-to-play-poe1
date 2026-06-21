@@ -13,6 +13,7 @@ class QLabel;
 class QStackedWidget;
 
 class QMenu;
+class ChatPage;
 class DmPage;
 class NavBar;
 class QTimer;
@@ -67,6 +68,7 @@ private:
     NotificationsPanel *m_log{};
     TaskManager        *m_taskManager{};
     TaskPanel          *m_taskPanel{};
+    ChatPage           *m_chatPage{};
     DmPage             *m_dmPage{};
     NavBar             *m_navBar{};
     QStackedWidget     *m_stack{};

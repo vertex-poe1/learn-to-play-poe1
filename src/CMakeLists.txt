@@ -8,6 +8,8 @@ qt_add_executable(l2p-poe1
     AppStyle.cpp
     AppStyle.h
     BackgroundWorker.h
+    ChatPage.cpp
+    ChatPage.h
     Database.cpp
     Database.h
     DatabaseHealth.cpp

@@ -309,11 +309,25 @@ DmPage::DmPage(Database *db, QWidget *parent)
     : QWidget(parent)
     , m_db(db)
 {
-    // ---- Filter header button -----------------------------------------------
-    m_filterBtn = new QPushButton("All conversations — click to filter", this);
+    // ---- Header row: conversation label + filter button --------------------
+    m_conversationLabel = new QLabel("All Conversations", this);
+
+    m_filterBtn = new QPushButton("Filter", this);
     m_filterBtn->setFlat(true);
-    m_filterBtn->setStyleSheet("QPushButton { text-align: left; padding: 4px 8px; }");
+    m_filterBtn->setStyleSheet("QPushButton { padding: 4px 8px; }");
     connect(m_filterBtn, &QPushButton::clicked, this, &DmPage::openFilterPanel);
+
+    auto *headerRow = new QWidget(this);
+    auto *headerBox = new QHBoxLayout(headerRow);
+    headerBox->setContentsMargins(8, 4, 4, 4);
+    headerBox->setSpacing(8);
+    headerBox->addWidget(m_conversationLabel);
+    headerBox->addStretch(1);
+    headerBox->addWidget(m_filterBtn);
+
+    auto *headerSep = new QFrame(this);
+    headerSep->setFrameShape(QFrame::HLine);
+    headerSep->setFrameShadow(QFrame::Sunken);
 
     // ---- Conversation scroll area -------------------------------------------
     m_scroll = new QScrollArea(this);
@@ -391,8 +405,9 @@ DmPage::DmPage(Database *db, QWidget *parent)
 
     auto *vbox = new QVBoxLayout(this);
     vbox->setContentsMargins(0, 4, 0, 0);
-    vbox->setSpacing(4);
-    vbox->addWidget(m_filterBtn);
+    vbox->setSpacing(0);
+    vbox->addWidget(headerRow);
+    vbox->addWidget(headerSep);
     vbox->addWidget(m_view, 1);
 
     // ---- Live rebuild timer -------------------------------------------------
@@ -451,10 +466,9 @@ void DmPage::onPlayerSelected(const QString &name)
     if (m_filterPlayer == name) return;
     m_filterPlayer = name;
     if (name.isEmpty())
-        m_filterBtn->setText("All conversations — click to filter");
+        m_conversationLabel->setText("All Conversations");
     else
-        m_filterBtn->setText(
-            QStringLiteral("Showing conversation with %1 — click to change filter").arg(name));
+        m_conversationLabel->setText(QStringLiteral("Conversation with %1").arg(name));
     m_limit = 100;
     rebuild();
     QTimer::singleShot(0, this, &DmPage::scrollToBottom);

@@ -1,0 +1,668 @@
+#include "ChatPage.h"
+#include "Database.h"
+#include "LiveEvent.h"
+#include "LiveEventBus.h"
+
+#include <functional>
+#include <QCheckBox>
+#include <QDate>
+#include <QDebug>
+#include <QElapsedTimer>
+#include <QEnterEvent>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLocale>
+#include <QPainter>
+#include <QPushButton>
+#include <QResizeEvent>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSet>
+#include <QStackedWidget>
+#include <QTimer>
+#include <QVBoxLayout>
+
+// ---- Channel colour / badge helpers -----------------------------------------
+
+static QColor channelColor(const QString &ch)
+{
+    if (ch == "#")     return { 91, 142, 222};  // Global  – steel blue
+    if (ch == "$")     return {212, 168,  48};  // Trade   – amber
+    if (ch == "%")     return {155, 110, 212};  // Party   – purple
+    if (ch == "&")     return { 76, 175, 142};  // Guild   – teal
+    if (ch == "@from") return {222,  91, 142};  // DM in   – pink
+    if (ch == "@to")   return { 91, 198, 174};  // DM out  – mint
+    return                    {130, 130, 130};  // unknown – gray
+}
+
+static QString channelBadge(const QString &ch)
+{
+    if (ch == "#")     return "#";
+    if (ch == "$")     return "$";
+    if (ch == "%")     return "%";
+    if (ch == "&")     return "&";
+    if (ch == "@from") return "←";
+    if (ch == "@to")   return "→";
+    return "?";
+}
+
+// ---- DateSeparator ----------------------------------------------------------
+
+class DateSeparator : public QWidget
+{
+public:
+    explicit DateSeparator(const QString &date, QWidget *parent = nullptr)
+        : QWidget(parent), m_date(date)
+    {
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        QFont f = font();
+        f.setPointSizeF(f.pointSizeF() + 2);
+        setFont(f);
+    }
+
+    QSize sizeHint() const override { return {0, fontMetrics().height() + 20}; }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        const int w = width(), mid = height() / 2;
+        const int tw = fontMetrics().horizontalAdvance(m_date) + 16;
+        const int tx = (w - tw) / 2;
+        p.setPen(palette().mid().color());
+        p.drawLine(16, mid, tx - 6, mid);
+        p.drawLine(tx + tw + 6, mid, w - 16, mid);
+        p.setPen(palette().placeholderText().color());
+        p.drawText(tx, 0, tw, height(), Qt::AlignCenter, m_date);
+    }
+
+private:
+    QString m_date;
+};
+
+// ---- ChatRow ----------------------------------------------------------------
+
+class ChatRow : public QWidget
+{
+public:
+    ChatRow(const QString &channel, const QString &player, const QString &guild,
+            const QString &message,  const QString &timeLabel,
+            QWidget *parent = nullptr)
+        : QWidget(parent)
+        , m_channel(channel), m_player(player), m_guild(guild)
+        , m_message(message), m_time(timeLabel)
+    {
+        QSizePolicy sp(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        sp.setHeightForWidth(true);
+        setSizePolicy(sp);
+        QFont f = font();
+        f.setPointSizeF(f.pointSizeF() + 2);
+        setFont(f);
+    }
+
+    bool hasHeightForWidth() const override { return true; }
+
+    int heightForWidth(int w) const override
+    {
+        const int msgW = w - kBarW - kPadL - kPadR;
+        if (msgW <= 0) return 40;
+        QFont boldF = font(); boldF.setBold(true);
+        const int nameH = QFontMetrics(boldF).height();
+        const int msgH  = QFontMetrics(font())
+            .boundingRect(0, 0, msgW, 10000, Qt::TextWordWrap, m_message).height();
+        return kPadV + nameH + kGap + msgH + kPadV;
+    }
+
+    QSize sizeHint() const override
+    {
+        return {200, heightForWidth(width() > 0 ? width() : 400)};
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *e) override
+    {
+        QWidget::resizeEvent(e);
+        if (e->size().width() != e->oldSize().width())
+            updateGeometry();
+    }
+
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+
+        const QColor accent = channelColor(m_channel);
+
+        // Accent bar
+        p.fillRect(0, 0, kBarW, height(), accent);
+
+        // Fonts
+        QFont boldF = font(); boldF.setBold(true);
+        QFont smallF = font(); smallF.setPointSizeF(font().pointSizeF() * 0.82);
+        const QFontMetrics boldFm(boldF), fm(font()), smallFm(smallF);
+
+        const int nameH      = boldFm.height();
+        const int totalTextW = width() - kBarW - kPadL - kPadR;
+
+        // Right section: time + badge
+        const QString badge  = channelBadge(m_channel);
+        const int     bw     = smallFm.horizontalAdvance(badge) + 10;
+        const int     timeW  = smallFm.horizontalAdvance(m_time) + 4;
+        const int     rightW = bw + kBadgeGap + timeW;
+
+        int y = kPadV;
+
+        // Badge (far right, vertically centred in name row)
+        const int bx = width() - kPadR - bw;
+        const int by = y + (nameH - kBadgeH) / 2;
+        p.setBrush(accent);
+        p.setPen(Qt::NoPen);
+        p.drawRoundedRect(bx, by, bw, kBadgeH, 4, 4);
+        p.setFont(smallF);
+        p.setPen(Qt::white);
+        p.drawText(bx, by, bw, kBadgeH, Qt::AlignCenter, badge);
+
+        // Timestamp (just left of badge)
+        const int tx = bx - kBadgeGap - timeW;
+        p.setPen(palette().placeholderText().color());
+        p.drawText(tx, y, timeW, nameH, Qt::AlignLeft | Qt::AlignVCenter, m_time);
+
+        // Name row – guild tag then player name
+        const int nameAvailW = totalTextW - rightW - 8;
+        int nameX = kBarW + kPadL;
+
+        if (!m_guild.isEmpty()) {
+            const QString gStr = QStringLiteral("<%1> ").arg(m_guild);
+            const int gw = qMin(fm.horizontalAdvance(gStr), nameAvailW);
+            p.setFont(font());
+            p.setPen(palette().placeholderText().color());
+            p.drawText(nameX, y, gw, nameH, Qt::AlignLeft | Qt::AlignVCenter, gStr);
+            nameX += gw;
+        }
+
+        const int nameRemain = (kBarW + kPadL + nameAvailW) - nameX;
+        if (nameRemain > 0) {
+            const QString eName = boldFm.elidedText(m_player, Qt::ElideRight, nameRemain);
+            p.setFont(boldF);
+            p.setPen(palette().windowText().color());
+            p.drawText(nameX, y, nameRemain, nameH, Qt::AlignLeft | Qt::AlignVCenter, eName);
+        }
+
+        y += nameH + kGap;
+
+        // Message
+        p.setFont(font());
+        p.setPen(palette().windowText().color());
+        p.drawText(kBarW + kPadL, y, totalTextW, height() - y - kPadV,
+                   Qt::TextWordWrap, m_message);
+    }
+
+private:
+    static constexpr int kBarW    = 4;
+    static constexpr int kPadL    = 10;
+    static constexpr int kPadR    = 10;
+    static constexpr int kPadV    = 6;
+    static constexpr int kGap     = 3;
+    static constexpr int kBadgeH  = 16;
+    static constexpr int kBadgeGap = 6;
+
+    QString m_channel, m_player, m_guild, m_message, m_time;
+};
+
+// ---- Date-bucket helpers ----------------------------------------------------
+
+struct DateBucket { QString label, from, to; };
+
+static QList<DateBucket> makeDateBuckets(const QDate &today, const QStringList &dates)
+{
+    QList<DateBucket> buckets;
+    const QString todayStr = today.toString(Qt::ISODate);
+    const QString yestStr  = today.addDays(-1).toString(Qt::ISODate);
+    const int     dow      = today.dayOfWeek();
+    const QDate   sow      = today.addDays(1 - dow);
+    const QString sowStr   = sow.toString(Qt::ISODate);
+    const QString slwStr   = sow.addDays(-7).toString(Qt::ISODate);
+    const QString elwStr   = sow.addDays(-1).toString(Qt::ISODate);
+    const QString somStr   = QDate(today.year(), today.month(), 1).toString(Qt::ISODate);
+
+    buckets << DateBucket{"Today",      todayStr, todayStr};
+    buckets << DateBucket{"Yesterday",  yestStr,  yestStr};
+    buckets << DateBucket{"This Week",  sowStr,   todayStr};
+    buckets << DateBucket{"Last Week",  slwStr,   elwStr};
+    buckets << DateBucket{"This Month", somStr,   todayStr};
+
+    const QLocale locale;
+    for (int m = today.month() - 1; m >= 1; --m) {
+        const QDate first = QDate(today.year(), m, 1);
+        const QDate last  = first.addMonths(1).addDays(-1);
+        buckets << DateBucket{locale.standaloneMonthName(m),
+                              first.toString(Qt::ISODate),
+                              last.toString(Qt::ISODate)};
+    }
+
+    QSet<int> years;
+    for (const QString &d : dates)
+        years.insert(d.left(4).toInt());
+    years.remove(today.year());
+    QList<int> sortedYears = years.values();
+    std::sort(sortedYears.begin(), sortedYears.end(), std::greater<int>());
+    for (int y : sortedYears)
+        buckets << DateBucket{QString::number(y),
+                              QStringLiteral("%1-01-01").arg(y),
+                              QStringLiteral("%1-12-31").arg(y)};
+    return buckets;
+}
+
+static QStringList datesInBucket(const QStringList &dates, const DateBucket &b)
+{
+    QStringList result;
+    for (const QString &d : dates)
+        if (d >= b.from && d <= b.to) result << d;
+    return result;
+}
+
+// ---- ScrollArrowButton ------------------------------------------------------
+
+class ScrollArrowButton : public QPushButton
+{
+public:
+    ScrollArrowButton(const QString &text, int dir, QScrollArea *target, QWidget *parent)
+        : QPushButton(text, parent), m_dir(dir), m_target(target)
+    {
+        setFlat(true);
+        m_timer = new QTimer(this);
+        m_timer->setInterval(50);
+        connect(m_timer, &QTimer::timeout, this, [this] {
+            auto *sb = m_target->verticalScrollBar();
+            sb->setValue(sb->value() + m_dir * 30);
+        });
+    }
+
+protected:
+    void enterEvent(QEnterEvent *e) override { QPushButton::enterEvent(e); m_timer->start(); }
+    void leaveEvent(QEvent    *e) override { QPushButton::leaveEvent(e); m_timer->stop();  }
+
+private:
+    int          m_dir;
+    QScrollArea *m_target;
+    QTimer      *m_timer{};
+};
+
+// ---- ChatPage ---------------------------------------------------------------
+
+ChatPage::ChatPage(Database *db, QWidget *parent)
+    : QWidget(parent), m_db(db)
+{
+    // ---- Checkbox row -------------------------------------------------------
+    m_cbLocal  = new QCheckBox("Local",  this);
+    m_cbGlobal = new QCheckBox("Global", this);
+    m_cbParty  = new QCheckBox("Party",  this);
+    m_cbDm     = new QCheckBox("DM",     this);
+    m_cbTrade  = new QCheckBox("Trade",  this);
+    m_cbGuild  = new QCheckBox("Guild",  this);
+
+    for (QCheckBox *cb : {m_cbLocal, m_cbGlobal, m_cbParty, m_cbDm, m_cbTrade, m_cbGuild})
+        cb->setChecked(true);
+
+    m_cbLocal->setEnabled(false);
+    m_cbLocal->setToolTip("Local chat is not yet captured from the log");
+
+    m_filterBtn = new QPushButton(this);
+    m_filterBtn->setFlat(true);
+    m_filterBtn->setStyleSheet("QPushButton { text-align: right; padding: 4px 8px; }");
+    connect(m_filterBtn, &QPushButton::clicked, this, &ChatPage::openFilterPanel);
+
+    auto *cbRow = new QWidget(this);
+    auto *cbBox = new QHBoxLayout(cbRow);
+    cbBox->setContentsMargins(8, 4, 4, 4);
+    cbBox->setSpacing(12);
+    cbBox->addWidget(m_cbLocal);
+    cbBox->addWidget(m_cbGlobal);
+    cbBox->addWidget(m_cbParty);
+    cbBox->addWidget(m_cbDm);
+    cbBox->addWidget(m_cbTrade);
+    cbBox->addWidget(m_cbGuild);
+    cbBox->addStretch(1);
+    cbBox->addWidget(m_filterBtn);
+
+    const auto onToggle = [this] {
+        m_limit = 100;
+        m_fromDate.clear();
+        m_toDate.clear();
+        updateFilterLabel();
+        if (isVisible()) rebuild();
+        else m_dirty = true;
+    };
+    for (QCheckBox *cb : {m_cbGlobal, m_cbParty, m_cbDm, m_cbTrade, m_cbGuild})
+        connect(cb, &QCheckBox::toggled, this, onToggle);
+
+    updateFilterLabel();
+
+    // ---- Separator ----------------------------------------------------------
+    auto *sep = new QFrame(this);
+    sep->setFrameShape(QFrame::HLine);
+    sep->setFrameShadow(QFrame::Sunken);
+
+    // ---- Scroll area --------------------------------------------------------
+    m_scroll = new QScrollArea(this);
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+
+    m_content = new QWidget;
+    m_contentLayout = new QVBoxLayout(m_content);
+    m_contentLayout->addStretch(1);
+    m_scroll->setWidget(m_content);
+
+    // ---- Filter panel -------------------------------------------------------
+    m_filterPanel = new QWidget(this);
+    {
+        m_filterScroll = new QScrollArea(m_filterPanel);
+        m_filterScroll->setWidgetResizable(true);
+        m_filterScroll->setFrameShape(QFrame::NoFrame);
+        m_filterScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_filterScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+        // Placeholder list — replaced each time openFilterPanel is called.
+        auto *placeholder = new QWidget;
+        (new QVBoxLayout(placeholder))->addStretch(1);
+        m_filterScroll->setWidget(placeholder);
+
+        auto *upBtn   = new ScrollArrowButton("▲", -1, m_filterScroll, m_filterPanel);
+        auto *downBtn = new ScrollArrowButton("▼",  1, m_filterScroll, m_filterPanel);
+
+        auto *header = new QWidget(m_filterPanel);
+        auto *hbox   = new QHBoxLayout(header);
+        hbox->setContentsMargins(4, 4, 4, 4);
+        hbox->setSpacing(8);
+
+        m_backBtn = new QPushButton("← Back", header);
+        m_backBtn->setFlat(true);
+        connect(m_backBtn, &QPushButton::clicked, this, [this] {
+            if (m_filterPath.isEmpty()) {
+                m_view->setCurrentIndex(0);
+            } else {
+                m_filterPath.removeLast();
+                refreshFilterPanel();
+                m_filterScroll->verticalScrollBar()->setValue(0);
+            }
+        });
+
+        m_filterTitle = new QLabel(header);
+        QFont f = m_filterTitle->font(); f.setBold(true);
+        m_filterTitle->setFont(f);
+
+        hbox->addWidget(m_backBtn);
+        hbox->addWidget(m_filterTitle, 1);
+
+        auto *hdrSep = new QFrame(m_filterPanel);
+        hdrSep->setFrameShape(QFrame::HLine);
+        hdrSep->setFrameShadow(QFrame::Sunken);
+
+        auto *vbox = new QVBoxLayout(m_filterPanel);
+        vbox->setContentsMargins(0, 0, 0, 0);
+        vbox->setSpacing(0);
+        vbox->addWidget(header);
+        vbox->addWidget(hdrSep);
+        vbox->addWidget(upBtn);
+        vbox->addWidget(m_filterScroll, 1);
+        vbox->addWidget(downBtn);
+    }
+
+    // ---- Stacked view: 0 = chat scroll, 1 = filter panel -------------------
+    m_view = new QStackedWidget(this);
+    m_view->addWidget(m_scroll);
+    m_view->addWidget(m_filterPanel);
+
+    // ---- Main layout --------------------------------------------------------
+    auto *vbox = new QVBoxLayout(this);
+    vbox->setContentsMargins(0, 4, 0, 0);
+    vbox->setSpacing(0);
+    vbox->addWidget(cbRow);
+    vbox->addWidget(sep);
+    vbox->addWidget(m_view, 1);
+
+    // ---- Live rebuild timer -------------------------------------------------
+    m_liveRebuildTimer = new QTimer(this);
+    m_liveRebuildTimer->setSingleShot(true);
+    m_liveRebuildTimer->setInterval(300);
+    connect(m_liveRebuildTimer, &QTimer::timeout, this, [this] {
+        if (!isVisible()) { m_dirty = true; return; }
+        rebuild();
+        if (m_liveRebuildScrollToBottom)
+            QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+    });
+
+    connect(LiveEventBus::instance(), &LiveEventBus::eventFired,
+            this, &ChatPage::onLiveChat);
+}
+
+void ChatPage::setDatabase(Database *db)
+{
+    m_db = db;
+}
+
+void ChatPage::reload()
+{
+    m_dirty = false;
+    m_limit = 100;
+    rebuild();
+    QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+}
+
+void ChatPage::showEvent(QShowEvent *e)
+{
+    QWidget::showEvent(e);
+    if (m_dirty && m_db)
+        reload();
+}
+
+void ChatPage::onLiveChat(const LiveEvent &event)
+{
+    if (event.type == LiveEventType::Chat) {
+        const QString ch = event.data.value("channel").toString();
+        if (ch.isEmpty() || !activeChannels().contains(ch[0]))
+            return;
+    } else if (event.type == LiveEventType::Whisper) {
+        if (!m_cbDm->isChecked()) return;
+    } else {
+        return;
+    }
+
+    if (!isVisible()) { m_dirty = true; return; }
+
+    // Only auto-scroll if the view was already at the bottom and no date filter active.
+    if (!m_liveRebuildTimer->isActive() && m_fromDate.isEmpty())
+        m_liveRebuildScrollToBottom =
+            m_scroll->verticalScrollBar()->value() >= m_scroll->verticalScrollBar()->maximum() - 4;
+
+    if (m_fromDate.isEmpty())
+        m_liveRebuildTimer->start();
+    else
+        m_dirty = true;
+}
+
+QSet<QChar> ChatPage::activeChannels() const
+{
+    QSet<QChar> result;
+    if (m_cbGlobal->isChecked()) result.insert(QLatin1Char('#'));
+    if (m_cbTrade->isChecked())  result.insert(QLatin1Char('$'));
+    if (m_cbParty->isChecked())  result.insert(QLatin1Char('%'));
+    if (m_cbGuild->isChecked())  result.insert(QLatin1Char('&'));
+    return result;
+}
+
+void ChatPage::updateFilterLabel()
+{
+    if (!m_fromDate.isEmpty()) {
+        const QString label = (m_fromDate == m_toDate)
+            ? m_fromDate
+            : QStringLiteral("%1 – %2").arg(m_fromDate, m_toDate);
+        m_filterBtn->setText(QStringLiteral("Filtered: %1 — click to change").arg(label));
+    } else {
+        m_filterBtn->setText("Filter by date");
+    }
+}
+
+void ChatPage::rebuild()
+{
+    if (!m_db) return;
+
+    QElapsedTimer t; t.start();
+
+    const QList<Database::ChatRecord> records =
+        m_db->fetchChats(activeChannels(), m_cbDm->isChecked(),
+                         m_limit, m_fromDate, m_toDate);
+
+    qDebug() << "[ChatPage] fetchChats" << records.size() << "rows in" << t.elapsed() << "ms";
+
+    auto *content = new QWidget;
+    auto *layout  = new QVBoxLayout(content);
+    layout->setContentsMargins(0, 8, 0, 8);
+    layout->setSpacing(0);
+    layout->addStretch(1);
+
+    if (records.size() == m_limit) {
+        auto *btn = new QPushButton("Load previous 50 messages", content);
+        btn->setFlat(true);
+        connect(btn, &QPushButton::clicked, this, [this] {
+            m_limit += 50;
+            rebuild();
+        });
+        layout->addWidget(btn);
+    }
+
+    const QString today = QDate::currentDate().toString(Qt::ISODate);
+    QString lastDate;
+    for (const auto &r : records) {
+        const QString date = r.occurredAt.left(10);
+        if (date != lastDate) {
+            lastDate = date;
+            layout->addWidget(new DateSeparator(date, content));
+        }
+        const QString timeLabel = (date == today)
+            ? r.occurredAt.mid(11, 5)   // HH:MM
+            : r.occurredAt.left(16);    // YYYY-MM-DD HH:MM
+        layout->addWidget(
+            new ChatRow(r.channel, r.playerName, r.guildTag, r.message, timeLabel, content));
+    }
+
+    qDebug() << "[ChatPage] rebuild done in" << t.elapsed() << "ms";
+    delete m_content;
+    m_content       = content;
+    m_contentLayout = layout;
+    m_scroll->setWidget(m_content);
+}
+
+void ChatPage::openFilterPanel()
+{
+    if (!m_db) return;
+    m_cachedDates = m_db->fetchChatDates(activeChannels(), m_cbDm->isChecked());
+    m_filterPath.clear();
+    refreshFilterPanel();
+    m_filterScroll->verticalScrollBar()->setValue(0);
+    m_view->setCurrentIndex(1);
+}
+
+void ChatPage::refreshFilterPanel()
+{
+    auto *listWidget = new QWidget;
+    auto *listLayout = new QVBoxLayout(listWidget);
+    listLayout->setContentsMargins(0, 0, 0, 0);
+    listLayout->setSpacing(0);
+
+    const auto addRow = [&](const QString &text, bool drill, std::function<void()> fn) {
+        auto *btn = new QPushButton(text + (drill ? "  ›" : ""), listWidget);
+        btn->setFlat(true);
+        btn->setMinimumHeight(40);
+        btn->setStyleSheet("QPushButton { text-align: left; padding: 4px 12px; }");
+        QObject::connect(btn, &QPushButton::clicked, this, std::move(fn));
+        listLayout->addWidget(btn);
+    };
+
+    const auto addSep = [&]() {
+        auto *line = new QFrame(listWidget);
+        line->setFrameShape(QFrame::HLine);
+        line->setFrameShadow(QFrame::Sunken);
+        listLayout->addWidget(line);
+    };
+
+    // ---- Root level ---------------------------------------------------------
+    if (m_filterPath.isEmpty()) {
+        m_filterTitle->setText("Filter by date");
+        m_backBtn->setText("✕ Close");
+
+        addRow("All messages  (no date filter)", false, [this] {
+            m_view->setCurrentIndex(0);
+            m_fromDate.clear();
+            m_toDate.clear();
+            m_limit = 100;
+            updateFilterLabel();
+            rebuild();
+            QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+        });
+        addSep();
+
+        const QList<DateBucket> buckets = makeDateBuckets(QDate::currentDate(), m_cachedDates);
+        for (const DateBucket &b : buckets) {
+            const QStringList inBucket = datesInBucket(m_cachedDates, b);
+            if (inBucket.isEmpty()) continue;
+
+            const int n = inBucket.size();
+            const QString label = n == 1
+                ? QStringLiteral("%1  (%2)").arg(b.label, inBucket[0])
+                : QStringLiteral("%1  (%2 days)").arg(b.label).arg(n);
+
+            const bool drill = n > 1;
+            addRow(label, drill, [this, b, inBucket, drill] {
+                if (!drill) {
+                    // Single date — apply directly
+                    m_view->setCurrentIndex(0);
+                    m_fromDate = m_toDate = inBucket[0];
+                    m_limit = 100;
+                    updateFilterLabel();
+                    rebuild();
+                    QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+                } else {
+                    m_filterPath.append(b.label);
+                    refreshFilterPanel();
+                    m_filterScroll->verticalScrollBar()->setValue(0);
+                }
+            });
+        }
+    }
+    // ---- Bucket level: list individual dates --------------------------------
+    else {
+        const QString &bucketLabel = m_filterPath[0];
+        m_filterTitle->setText(bucketLabel);
+        m_backBtn->setText("← Back");
+
+        const QList<DateBucket> buckets = makeDateBuckets(QDate::currentDate(), m_cachedDates);
+        QStringList dates;
+        for (const DateBucket &b : buckets) {
+            if (b.label == bucketLabel) {
+                dates = datesInBucket(m_cachedDates, b);
+                break;
+            }
+        }
+
+        for (const QString &date : dates) {
+            addRow(date, false, [this, date] {
+                m_view->setCurrentIndex(0);
+                m_fromDate = m_toDate = date;
+                m_limit = 100;
+                updateFilterLabel();
+                rebuild();
+                QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+            });
+        }
+    }
+
+    listLayout->addStretch(1);
+    m_filterScroll->setWidget(listWidget);
+}
+
+void ChatPage::scrollToBottom()
+{
+    m_scroll->verticalScrollBar()->setValue(m_scroll->verticalScrollBar()->maximum());
+}

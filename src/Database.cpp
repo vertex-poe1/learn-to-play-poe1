@@ -3,6 +3,7 @@
 #include <sqlite3.h>
 #include <algorithm>
 #include <cstdio>
+#include <QDate>
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QHash>
@@ -406,6 +407,16 @@ void Database::initSchema()
     )");
 
     execSql(m_db, R"(
+        CREATE INDEX IF NOT EXISTS idx_chats_by_time
+        ON chats(occurred_at DESC, channel);
+    )");
+
+    execSql(m_db, R"(
+        CREATE INDEX IF NOT EXISTS idx_whispers_by_time
+        ON whispers(occurred_at DESC);
+    )");
+
+    execSql(m_db, R"(
         CREATE TABLE IF NOT EXISTS general_events (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id  INTEGER NOT NULL REFERENCES sessions(id),
@@ -561,6 +572,126 @@ QList<Database::PartnerRecord> Database::fetchWhisperPartnersWithDates() const
     result.reserve(ordered.size());
     for (const QString &nm : ordered)
         result << PartnerRecord{nm, dateMap.value(nm)};
+    return result;
+}
+
+// Safely builds a SQL IN clause from a set of known single-character values.
+static QString buildInClause(const QSet<QChar> &chars)
+{
+    QString result;
+    for (QChar ch : chars) {
+        if (!result.isEmpty()) result += ',';
+        result += '\'';
+        result += ch;
+        result += '\'';
+    }
+    return result;
+}
+
+static QString colStr(sqlite3_stmt *stmt, int col)
+{
+    const auto *p = sqlite3_column_text(stmt, col);
+    return p ? QString::fromUtf8(reinterpret_cast<const char *>(p)) : QString{};
+}
+
+QList<Database::ChatRecord> Database::fetchChats(
+    const QSet<QChar> &channels, bool includeDms,
+    int limit, const QString &fromDate, const QString &toDate) const
+{
+    if (!m_db) return {};
+    if (channels.isEmpty() && !includeDms) return {};
+
+    const bool useLimit  = limit > 0;
+    const bool hasRange  = !fromDate.isEmpty();
+    const bool hasChans  = !channels.isEmpty();
+
+    // Date bounds: "YYYY-MM-DD HH:MM:SS" strings, safe to embed (ISO format, DB-sourced).
+    const QString fromTs = hasRange ? (fromDate + " 00:00:00") : QString{};
+    const QString toTs   = hasRange
+        ? (QDate::fromString(toDate, Qt::ISODate).addDays(1).toString(Qt::ISODate) + " 00:00:00")
+        : QString{};
+
+    // Build UNION ALL from the required sources.
+    QString sql = "SELECT source,channel,player_name,guild_tag,message,occurred_at FROM (";
+
+    bool first = true;
+    if (hasChans) {
+        const QString inClause = buildInClause(channels);
+        sql += "SELECT 'chat' AS source,c.channel,pc.name,COALESCE(g.tag,''),"
+               "c.message,c.occurred_at "
+               "FROM chats c "
+               "JOIN public_chars pc ON pc.id=c.public_char_id "
+               "LEFT JOIN guilds g ON g.id=c.guild_id "
+               "WHERE c.channel IN (" + inClause + ")";
+        if (hasRange)
+            sql += " AND c.occurred_at>='" + fromTs + "' AND c.occurred_at<'" + toTs + "'";
+        first = false;
+    }
+
+    if (includeDms) {
+        if (!first) sql += " UNION ALL ";
+        sql += "SELECT 'dm',"
+               "CASE direction WHEN 'from' THEN '@from' ELSE '@to' END,"
+               "w.player_name,COALESCE(g.tag,''),w.message,w.occurred_at "
+               "FROM whispers w LEFT JOIN guilds g ON g.id=w.guild_id";
+        if (hasRange)
+            sql += " WHERE w.occurred_at>='" + fromTs + "' AND w.occurred_at<'" + toTs + "'";
+    }
+
+    sql += ") ORDER BY occurred_at DESC";
+    if (useLimit) sql += QStringLiteral(" LIMIT %1").arg(limit);
+    sql += ";";
+
+    sqlite3_stmt *stmt = nullptr;
+    const QByteArray sqlBytes = sql.toUtf8();
+    sqlite3_prepare_v2(m_db, sqlBytes.constData(), -1, &stmt, nullptr);
+
+    QList<ChatRecord> result;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        ChatRecord r;
+        r.source     = colStr(stmt, 0);
+        r.channel    = colStr(stmt, 1);
+        r.playerName = colStr(stmt, 2);
+        r.guildTag   = colStr(stmt, 3);
+        r.message    = colStr(stmt, 4);
+        r.occurredAt = colStr(stmt, 5);
+        result.append(r);
+    }
+    sqlite3_finalize(stmt);
+
+    if (useLimit)
+        std::reverse(result.begin(), result.end());
+
+    return result;
+}
+
+QStringList Database::fetchChatDates(const QSet<QChar> &channels, bool includeDms) const
+{
+    if (!m_db) return {};
+    if (channels.isEmpty() && !includeDms) return {};
+
+    QString sql;
+    if (!channels.isEmpty() && includeDms) {
+        const QString inClause = buildInClause(channels);
+        sql = "SELECT DISTINCT date(occurred_at) FROM ("
+              "SELECT occurred_at FROM chats WHERE channel IN (" + inClause + ")"
+              " UNION ALL SELECT occurred_at FROM whispers) ORDER BY 1 DESC;";
+    } else if (!channels.isEmpty()) {
+        const QString inClause = buildInClause(channels);
+        sql = "SELECT DISTINCT date(occurred_at) FROM chats"
+              " WHERE channel IN (" + inClause + ") ORDER BY 1 DESC;";
+    } else {
+        sql = "SELECT DISTINCT date(occurred_at) FROM whispers ORDER BY 1 DESC;";
+    }
+
+    sqlite3_stmt *stmt = nullptr;
+    const QByteArray sqlBytes = sql.toUtf8();
+    sqlite3_prepare_v2(m_db, sqlBytes.constData(), -1, &stmt, nullptr);
+
+    QStringList result;
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+        result << colStr(stmt, 0);
+    sqlite3_finalize(stmt);
     return result;
 }
 
