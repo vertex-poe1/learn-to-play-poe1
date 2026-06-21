@@ -123,8 +123,8 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
 
     auto *header = new QWidget(this);
     auto *headerBox = new QHBoxLayout(header);
-    headerBox->setContentsMargins(4, 4, 4, 4);
-    headerBox->setSpacing(8);
+    headerBox->setContentsMargins(Theme::spacingXs, Theme::spacingXs, Theme::spacingXs, Theme::spacingXs);
+    headerBox->setSpacing(Theme::spacingSm);
     headerBox->addWidget(m_backBtn);
     headerBox->addWidget(m_titleLabel, 1);
 
@@ -145,8 +145,8 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     // ---- Page 0: Category list ----------------------------------------
     auto *categoryPage   = new QWidget;
     auto *categoryLayout = new QVBoxLayout(categoryPage);
-    categoryLayout->setContentsMargins(24, 20, 24, 20);
-    categoryLayout->setSpacing(12);
+    categoryLayout->setContentsMargins(Theme::spacing2xl, Theme::spacingXl, Theme::spacing2xl, Theme::spacingXl);
+    categoryLayout->setSpacing(Theme::spacingBase);
 
     const auto makeItemBtn = [&](const QString &label, bool arrow = true) {
         auto *btn = new QPushButton(arrow ? label + "  ›" : label, categoryPage);
@@ -167,7 +167,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     const auto addDivider = [&]() {
         auto *w = new QWidget(categoryPage);
         auto *l = new QVBoxLayout(w);
-        l->setContentsMargins(8, 4, 8, 4);
+        l->setContentsMargins(Theme::spacingSm, Theme::spacingXs, Theme::spacingSm, Theme::spacingXs);
         auto *line = new QFrame(w);
         line->setFrameShape(QFrame::HLine);
         line->setFrameShadow(QFrame::Sunken);
@@ -205,7 +205,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
 
     auto *gameContent = new QWidget;
     auto *gameForm    = new QFormLayout(gameContent);
-    gameForm->setContentsMargins(12, 12, 12, 12);
+    gameForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_autoDetect = new QCheckBox(gameContent);
     m_autoDetect->setChecked(config.autoDetectInstallDir);
@@ -232,7 +232,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     // ---- Page 2: Window -----------------------------------------------
     auto *windowContent = new QWidget;
     auto *windowForm    = new QFormLayout(windowContent);
-    windowForm->setContentsMargins(12, 12, 12, 12);
+    windowForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_startMinimized = new QCheckBox(windowContent);
     m_startMinimized->setChecked(config.startMinimized);
@@ -247,7 +247,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     // ---- Page 3: Chat -------------------------------------------------
     auto *chatContent = new QWidget;
     auto *chatForm    = new QFormLayout(chatContent);
-    chatForm->setContentsMargins(12, 12, 12, 12);
+    chatForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_showGuildTags = new QCheckBox(chatContent);
     m_showGuildTags->setChecked(config.showGuildTags);
@@ -258,8 +258,8 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     // ---- Page 4: About ------------------------------------------------
     auto *aboutContent = new QWidget;
     auto *aboutLayout  = new QVBoxLayout(aboutContent);
-    aboutLayout->setContentsMargins(12, 16, 12, 12);
-    aboutLayout->setSpacing(4);
+    aboutLayout->setContentsMargins(Theme::spacingBase, Theme::spacingLg, Theme::spacingBase, Theme::spacingBase);
+    aboutLayout->setSpacing(Theme::spacingXs);
 
     auto *appNameLabel = new QLabel(QCoreApplication::applicationName(), aboutContent);
     QFont appNameFont  = appNameLabel->font();
@@ -299,14 +299,14 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
 
     aboutLayout->addWidget(appNameLabel);
     aboutLayout->addWidget(versionLabel);
-    aboutLayout->addSpacing(4);
+    aboutLayout->addSpacing(Theme::spacingXs);
     aboutLayout->addWidget(qtLabel);
-    aboutLayout->addSpacing(12);
+    aboutLayout->addSpacing(Theme::spacingBase);
     aboutLayout->addWidget(aboutSep);
-    aboutLayout->addSpacing(8);
+    aboutLayout->addSpacing(Theme::spacingSm);
     aboutLayout->addWidget(configTitle);
     aboutLayout->addWidget(configPathLabel);
-    aboutLayout->addSpacing(4);
+    aboutLayout->addSpacing(Theme::spacingXs);
     aboutLayout->addWidget(copyBtn, 0, Qt::AlignLeft);
     aboutLayout->addStretch(1);
 
@@ -315,8 +315,8 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     // ---- Page 5: Alerts -----------------------------------------------
     auto *alertsContent = new QWidget;
     auto *alertsLayout  = new QVBoxLayout(alertsContent);
-    alertsLayout->setContentsMargins(12, 12, 12, 12);
-    alertsLayout->setSpacing(8);
+    alertsLayout->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
+    alertsLayout->setSpacing(Theme::spacingSm);
 
     alertsLayout->addWidget(new QLabel("When a game event fires, take an action:", alertsContent));
 

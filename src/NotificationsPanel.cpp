@@ -1,4 +1,5 @@
 #include "NotificationsPanel.h"
+#include "Theme.h"
 
 #include <QDateTime>
 #include <QScrollBar>
@@ -16,7 +17,7 @@ NotificationsPanel::NotificationsPanel(QWidget *parent)
     m_layout = new QVBoxLayout(m_container);
     m_layout->setAlignment(Qt::AlignTop);
     m_layout->setSpacing(6);
-    m_layout->setContentsMargins(8, 8, 8, 8);
+    m_layout->setContentsMargins(Theme::spacingSm, Theme::spacingSm, Theme::spacingSm, Theme::spacingSm);
     m_layout->addStretch();
 
     setWidget(m_container);

@@ -38,8 +38,8 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
 
     auto *header = new QWidget(this);
     auto *headerBox = new QHBoxLayout(header);
-    headerBox->setContentsMargins(4, 4, 4, 4);
-    headerBox->setSpacing(8);
+    headerBox->setContentsMargins(Theme::spacingXs, Theme::spacingXs, Theme::spacingXs, Theme::spacingXs);
+    headerBox->setSpacing(Theme::spacingSm);
     headerBox->addWidget(m_backBtn);
     headerBox->addWidget(m_titleLabel, 1);
 
@@ -94,7 +94,7 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
 
     auto *gameContent = new QWidget;
     auto *gameForm    = new QFormLayout(gameContent);
-    gameForm->setContentsMargins(12, 12, 12, 12);
+    gameForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_autoDetect = new QCheckBox(gameContent);
     m_autoDetect->setChecked(config.autoDetectInstallDir);
@@ -121,7 +121,7 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
     // ---- Page 2: Window -----------------------------------------------
     auto *windowContent = new QWidget;
     auto *windowForm    = new QFormLayout(windowContent);
-    windowForm->setContentsMargins(12, 12, 12, 12);
+    windowForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_startMinimized = new QCheckBox(windowContent);
     m_startMinimized->setChecked(config.startMinimized);
@@ -136,7 +136,7 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
     // ---- Page 3: Chat -------------------------------------------------
     auto *chatContent = new QWidget;
     auto *chatForm    = new QFormLayout(chatContent);
-    chatForm->setContentsMargins(12, 12, 12, 12);
+    chatForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_showGuildTags = new QCheckBox(chatContent);
     m_showGuildTags->setChecked(config.showGuildTags);
@@ -147,8 +147,8 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
     // ---- Page 4: About ------------------------------------------------
     auto *aboutContent = new QWidget;
     auto *aboutLayout  = new QVBoxLayout(aboutContent);
-    aboutLayout->setContentsMargins(12, 16, 12, 12);
-    aboutLayout->setSpacing(4);
+    aboutLayout->setContentsMargins(Theme::spacingBase, Theme::spacingLg, Theme::spacingBase, Theme::spacingBase);
+    aboutLayout->setSpacing(Theme::spacingXs);
 
     auto *appNameLabel = new QLabel(QCoreApplication::applicationName(), aboutContent);
     QFont appNameFont  = appNameLabel->font();
@@ -188,14 +188,14 @@ SettingsDialog::SettingsDialog(AppConfig &config, QWidget *parent)
 
     aboutLayout->addWidget(appNameLabel);
     aboutLayout->addWidget(versionLabel);
-    aboutLayout->addSpacing(4);
+    aboutLayout->addSpacing(Theme::spacingXs);
     aboutLayout->addWidget(qtLabel);
-    aboutLayout->addSpacing(12);
+    aboutLayout->addSpacing(Theme::spacingBase);
     aboutLayout->addWidget(aboutSep);
-    aboutLayout->addSpacing(8);
+    aboutLayout->addSpacing(Theme::spacingSm);
     aboutLayout->addWidget(configTitle);
     aboutLayout->addWidget(configPathLabel);
-    aboutLayout->addSpacing(4);
+    aboutLayout->addSpacing(Theme::spacingXs);
     aboutLayout->addWidget(copyBtn, 0, Qt::AlignLeft);
     aboutLayout->addStretch(1);
 

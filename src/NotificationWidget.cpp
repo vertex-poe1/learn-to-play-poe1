@@ -24,7 +24,7 @@ public:
         f.setFamily("monospace");
         setFont(f);
         setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-        setContentsMargins(4, 1, 4, 1);
+        setContentsMargins(Theme::spacingXs, 1, Theme::spacingXs, 1);
     }
 
     QSize sizeHint() const override
@@ -96,7 +96,7 @@ QWidget *buildSegmentedRow(const QString &text, const QColor &color, double font
     auto *row    = new QWidget(parent);
     auto *layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    layout->setSpacing(Theme::spacingXs);
 
     auto applyLabelStyle = [&](QLabel *lbl) {
         QPalette pal = lbl->palette();
@@ -163,11 +163,11 @@ NotificationWidget::NotificationWidget(const QString &title, const QString &tag,
     tsLabel->setAlignment(Qt::AlignRight | Qt::AlignTop);
 
     auto *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(10, 8, 10, 8);
-    outer->setSpacing(8);
+    outer->setContentsMargins(10, Theme::spacingSm, 10, Theme::spacingSm);
+    outer->setSpacing(Theme::spacingSm);
 
     auto *topRow = new QHBoxLayout;
-    topRow->setSpacing(8);
+    topRow->setSpacing(Theme::spacingSm);
 
     if (!title.isEmpty()) {
         auto *left       = new QWidget(this);

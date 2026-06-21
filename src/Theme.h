@@ -42,6 +42,14 @@ inline const QColor borderDisabled { 56,  56,  56};  // #383838
 inline const QColor borderMenuSep  { 64,  64,  64};  // #404040
 inline const QColor scrollHandle   { 72,  72,  72};  // #484848
 
+// --- Spacing (Tailwind 4px-base scale with semantic names) ---
+inline constexpr int spacingXs   =  4;  // space-1   4px
+inline constexpr int spacingSm   =  8;  // space-2   8px
+inline constexpr int spacingBase = 12;  // space-3  12px
+inline constexpr int spacingLg   = 16;  // space-4  16px
+inline constexpr int spacingXl   = 20;  // space-5  20px
+inline constexpr int spacing2xl  = 24;  // space-6  24px
+
 // --- Font sizes (Tailwind typographic scale, px × 0.75 → pt at 96 DPI) ---
 inline constexpr double fontXs   =  9.0;  // text-xs   12px
 inline constexpr double fontSm   = 10.5;  // text-sm   14px

@@ -34,7 +34,7 @@ TaskPanel::TaskPanel(TaskManager *manager, QWidget *parent)
     separator->setPalette(sepPal);
 
     m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(8, 4, 8, 4);
+    m_layout->setContentsMargins(Theme::spacingSm, Theme::spacingXs, Theme::spacingSm, Theme::spacingXs);
     m_layout->setSpacing(2);
     m_layout->addWidget(separator);
 
@@ -74,7 +74,7 @@ void TaskPanel::addRow(const TaskRecord &record)
     auto *row = new QWidget(this);
     auto *hbox = new QHBoxLayout(row);
     hbox->setContentsMargins(0, 3, 0, 3);
-    hbox->setSpacing(8);
+    hbox->setSpacing(Theme::spacingSm);
 
     auto *name = new QLabel(record.name, row);
     name->setFixedWidth(180);

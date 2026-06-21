@@ -196,7 +196,7 @@ private:
         return qMin(static_cast<int>(containerW * kMaxRatio), containerW - 2 * kMargin);
     }
 
-    static constexpr int    kMargin   = 8;
+    static constexpr int    kMargin   = Theme::spacingSm;
     static constexpr int    kPad      = 10;
     static constexpr double kMaxRatio = 0.65;
     static constexpr int    kRadius   = 8;
@@ -330,8 +330,8 @@ DmPage::DmPage(Database *db, QWidget *parent)
 
     auto *headerRow = new QWidget(this);
     auto *headerBox = new QHBoxLayout(headerRow);
-    headerBox->setContentsMargins(8, 4, 4, 4);
-    headerBox->setSpacing(8);
+    headerBox->setContentsMargins(Theme::spacingSm, Theme::spacingXs, Theme::spacingXs, Theme::spacingXs);
+    headerBox->setSpacing(Theme::spacingSm);
     headerBox->addWidget(m_conversationLabel);
     headerBox->addStretch(1);
     headerBox->addWidget(m_filterBtn);
@@ -372,8 +372,8 @@ DmPage::DmPage(Database *db, QWidget *parent)
         // Header row: back button + title label
         auto *header = new QWidget(m_filterPanel);
         auto *hbox   = new QHBoxLayout(header);
-        hbox->setContentsMargins(4, 4, 4, 4);
-        hbox->setSpacing(8);
+        hbox->setContentsMargins(Theme::spacingXs, Theme::spacingXs, Theme::spacingXs, Theme::spacingXs);
+        hbox->setSpacing(Theme::spacingSm);
 
         m_backBtn = new QPushButton("← Back", header);
         m_backBtn->setFlat(true);
@@ -415,7 +415,7 @@ DmPage::DmPage(Database *db, QWidget *parent)
     m_view->addWidget(m_filterPanel);
 
     auto *vbox = new QVBoxLayout(this);
-    vbox->setContentsMargins(0, 4, 0, 0);
+    vbox->setContentsMargins(0, Theme::spacingXs, 0, 0);
     vbox->setSpacing(0);
     vbox->addWidget(headerRow);
     vbox->addWidget(headerSep);
@@ -651,7 +651,7 @@ void DmPage::rebuild()
 
     auto *content       = new QWidget;
     auto *contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(8, 8, 8, 8);
+    contentLayout->setContentsMargins(Theme::spacingSm, Theme::spacingSm, Theme::spacingSm, Theme::spacingSm);
     contentLayout->setSpacing(2);
     contentLayout->addStretch(1);
 

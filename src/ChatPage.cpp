@@ -316,8 +316,8 @@ ChatPage::ChatPage(Database *db, QWidget *parent)
 
     auto *cbRow = new QWidget(this);
     auto *cbBox = new QHBoxLayout(cbRow);
-    cbBox->setContentsMargins(8, 4, 4, 4);
-    cbBox->setSpacing(12);
+    cbBox->setContentsMargins(Theme::spacingSm, Theme::spacingXs, Theme::spacingXs, Theme::spacingXs);
+    cbBox->setSpacing(Theme::spacingBase);
     cbBox->addWidget(m_cbLocal);
     cbBox->addWidget(m_cbGlobal);
     cbBox->addWidget(m_cbParty);
@@ -374,8 +374,8 @@ ChatPage::ChatPage(Database *db, QWidget *parent)
 
         auto *header = new QWidget(m_filterPanel);
         auto *hbox   = new QHBoxLayout(header);
-        hbox->setContentsMargins(4, 4, 4, 4);
-        hbox->setSpacing(8);
+        hbox->setContentsMargins(Theme::spacingXs, Theme::spacingXs, Theme::spacingXs, Theme::spacingXs);
+        hbox->setSpacing(Theme::spacingSm);
 
         m_backBtn = new QPushButton("← Back", header);
         m_backBtn->setFlat(true);
@@ -417,7 +417,7 @@ ChatPage::ChatPage(Database *db, QWidget *parent)
 
     // ---- Main layout --------------------------------------------------------
     auto *vbox = new QVBoxLayout(this);
-    vbox->setContentsMargins(0, 4, 0, 0);
+    vbox->setContentsMargins(0, Theme::spacingXs, 0, 0);
     vbox->setSpacing(0);
     vbox->addWidget(cbRow);
     vbox->addWidget(sep);
@@ -527,7 +527,7 @@ void ChatPage::rebuild()
 
     auto *content = new QWidget;
     auto *layout  = new QVBoxLayout(content);
-    layout->setContentsMargins(0, 8, 0, 8);
+    layout->setContentsMargins(0, Theme::spacingSm, 0, Theme::spacingSm);
     layout->setSpacing(0);
     layout->addStretch(1);
 
