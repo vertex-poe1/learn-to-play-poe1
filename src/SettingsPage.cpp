@@ -23,7 +23,7 @@
 #include <QVBoxLayout>
 
 // ---------------------------------------------------------------------------
-// Alert rule helpers (event/action presets, shared with LiveAlertsDialog)
+// Alert rule helpers (event/action presets)
 // ---------------------------------------------------------------------------
 namespace {
 

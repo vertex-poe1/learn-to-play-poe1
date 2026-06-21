@@ -8,7 +8,6 @@
 #include <QRect>
 #include <QSystemTrayIcon>
 
-class QAction;
 class QLabel;
 class QStackedWidget;
 
@@ -46,7 +45,6 @@ protected:
 private slots:
     void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
     void showSettings();
-    void showLiveAlerts();
     void onConfigChanged();
     void onPollTimer();
     void onTaskUpdated(int id);
@@ -56,7 +54,6 @@ private slots:
 private:
     void showWindow();
     void setupTray();
-    void setupMenuBar();
     void scheduleLogIngestion();
     void maybeIngestClientLog(const QString &installDir, bool liveMode = false);
     void startLiveIngest(const QString &installDir);

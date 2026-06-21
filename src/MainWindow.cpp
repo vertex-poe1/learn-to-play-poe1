@@ -3,7 +3,6 @@
 #include "Database.h"
 #include "DmPage.h"
 #include "GameOverlay.h"
-#include "LiveAlertsDialog.h"
 #include "LiveEventBus.h"
 #include "LiveEventRuleEngine.h"
 #include "LogIngestWorker.h"
@@ -12,7 +11,6 @@
 #include "TaskPanel.h"
 #include "WindowTracker.h"
 
-#include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QScreen>
@@ -22,7 +20,6 @@
 #include <QIcon>
 #include <QLabel>
 #include <QMenu>
-#include <QMenuBar>
 #include <QStatusBar>
 #include <QSystemTrayIcon>
 #include <QTime>
@@ -118,7 +115,6 @@ MainWindow::MainWindow(QWidget *parent)
                 log(title, tag, msg);
             });
 
-    setupMenuBar();
     setupTray();
 
     m_statusLabel = new QLabel(this);
@@ -161,15 +157,6 @@ MainWindow::~MainWindow()
 {
     delete m_tracker;
     delete m_db;
-}
-
-void MainWindow::setupMenuBar()
-{
-    QMenu *fileMenu = menuBar()->addMenu("&File");
-    fileMenu->addAction("&Settings", this, &MainWindow::showSettings);
-    fileMenu->addAction("Live &Alerts…", this, &MainWindow::showLiveAlerts);
-    fileMenu->addSeparator();
-    fileMenu->addAction("E&xit", qApp, &QApplication::quit);
 }
 
 void MainWindow::setupTray()
@@ -216,16 +203,6 @@ void MainWindow::onGearClicked()
         onTabChanged(m_navBar->currentIndex());
     else
         showSettings();
-}
-
-void MainWindow::showLiveAlerts()
-{
-    LiveAlertsDialog dlg(m_config.liveAlertRules, this);
-    if (dlg.exec() == QDialog::Accepted) {
-        m_config.liveAlertRules = dlg.rules();
-        m_config.save();
-        m_ruleEngine->setRules(m_config.liveAlertRules);
-    }
 }
 
 void MainWindow::onConfigChanged()
