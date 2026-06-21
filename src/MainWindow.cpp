@@ -79,6 +79,7 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[startup] UI built in" << startupTimer.elapsed() << "ms";
     m_config = AppConfig::load();
     qDebug() << "[startup] config loaded in" << startupTimer.elapsed() << "ms";
+    m_navBar->setCurrentIndex(qBound(0, m_config.defaultTab, 3));
 
     m_settingsPage = new SettingsPage(m_config, this);
     m_stack->addWidget(m_settingsPage); // Settings - index 4

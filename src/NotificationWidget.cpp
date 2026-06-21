@@ -15,12 +15,11 @@ namespace {
 class BadgeLabel : public QWidget
 {
 public:
-    explicit BadgeLabel(const QString &text, const QColor &textColor, double fontPt,
+    explicit BadgeLabel(const QString &text, const QColor &textColor,
                         QWidget *parent = nullptr)
         : QWidget(parent), m_text(text), m_textColor(textColor)
     {
         QFont f = font();
-        f.setPointSizeF(fontPt);
         f.setFamily("monospace");
         setFont(f);
         setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -71,6 +70,7 @@ protected:
     {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
+        p.translate(0, 1);
 
         const int r = height() / 2;
         const QRect border = rect().adjusted(0, 0, -1, -1);
@@ -91,7 +91,7 @@ private:
     QColor m_textColor;
 };
 
-QWidget *buildSegmentedRow(const QString &text, const QColor &color, double fontPt, QWidget *parent)
+QWidget *buildSegmentedRow(const QString &text, const QColor &color, QWidget *parent)
 {
     auto *row    = new QWidget(parent);
     auto *layout = new QHBoxLayout(row);
@@ -102,9 +102,6 @@ QWidget *buildSegmentedRow(const QString &text, const QColor &color, double font
         QPalette pal = lbl->palette();
         pal.setColor(QPalette::WindowText, color);
         lbl->setPalette(pal);
-        QFont f = lbl->font();
-        f.setPointSizeF(fontPt);
-        lbl->setFont(f);
     };
 
     static const QRegularExpression re("\\{([^}]*)\\}");
@@ -117,7 +114,7 @@ QWidget *buildSegmentedRow(const QString &text, const QColor &color, double font
             applyLabelStyle(lbl);
             layout->addWidget(lbl);
         }
-        auto *badge = new BadgeLabel(match.captured(1), color, fontPt - 1.5, row);
+        auto *badge = new BadgeLabel(match.captured(1), color, row);
         layout->addWidget(badge);
         lastEnd = match.capturedEnd();
     }
@@ -155,9 +152,6 @@ NotificationWidget::NotificationWidget(const QString &title, const QString &tag,
         QPalette pal = tsLabel->palette();
         pal.setColor(QPalette::WindowText, style.timestampColor);
         tsLabel->setPalette(pal);
-        QFont f = tsLabel->font();
-        f.setPointSizeF(Theme::fontBase);
-        tsLabel->setFont(f);
     }
     tsLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     tsLabel->setAlignment(Qt::AlignRight | Qt::AlignTop);
@@ -199,12 +193,12 @@ NotificationWidget::NotificationWidget(const QString &title, const QString &tag,
         leftLayout->addStretch();
         topRow->addWidget(left, 1);
     } else {
-        topRow->addWidget(buildSegmentedRow(message, style.textColor, Theme::fontBase, this), 1);
+        topRow->addWidget(buildSegmentedRow(message, style.textColor, this), 1);
     }
 
     topRow->addWidget(tsLabel, 0);
     outer->addLayout(topRow);
 
     if (!title.isEmpty())
-        outer->addWidget(buildSegmentedRow(message, style.bodyColor, Theme::fontBase, this));
+        outer->addWidget(buildSegmentedRow(message, style.bodyColor, this));
 }

@@ -5,6 +5,7 @@
 #include <QWidget>
 
 class QCheckBox;
+class QComboBox;
 class ListEditor;
 class QLabel;
 class QListWidget;
@@ -48,6 +49,7 @@ private:
     QCheckBox  *m_enableOverlay{};
 
     // Window page
+    QComboBox  *m_defaultTab{};
     QCheckBox  *m_startMinimized{};
     QCheckBox  *m_minimizeToTray{};
 

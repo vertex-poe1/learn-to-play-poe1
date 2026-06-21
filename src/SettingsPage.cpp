@@ -5,6 +5,7 @@
 
 #include <QCheckBox>
 #include <QClipboard>
+#include <QMessageBox>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -177,8 +178,13 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
 
     m_stack->addWidget(categoryPage); // index 0
 
-    connect(makeItemBtn("Exit App", false), &QPushButton::clicked,
-            qApp, &QCoreApplication::quit);
+    connect(makeItemBtn("Exit App", false), &QPushButton::clicked, this, [this]() {
+        const auto reply = QMessageBox::question(this, "Exit", "Really exit?",
+                                                 QMessageBox::Yes | QMessageBox::Cancel,
+                                                 QMessageBox::Yes);
+        if (reply == QMessageBox::Yes)
+            qApp->quit();
+    });
     connect(makeItemBtn("Alerts"), &QPushButton::clicked,
             this, [this] { navigateTo(6, "Alerts"); });
 
@@ -242,6 +248,12 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     auto *windowContent = new QWidget;
     auto *windowForm    = new QFormLayout(windowContent);
     windowForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
+
+    m_defaultTab = new QComboBox(windowContent);
+    m_defaultTab->addItems({"Past", "Current", "Chats", "DMs"});
+    m_defaultTab->setCurrentIndex(qBound(0, config.defaultTab, 3));
+    m_defaultTab->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    windowForm->addRow("Default tab:", m_defaultTab);
 
     m_startMinimized = new QCheckBox(windowContent);
     m_startMinimized->setChecked(config.startMinimized);
@@ -355,6 +367,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     connect(m_installDirs,    &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
     connect(m_exeNames,       &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
     connect(m_enableOverlay,  &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
+    connect(m_defaultTab,     &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
     connect(m_startMinimized, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_minimizeToTray, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_showGuildTags,  &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
@@ -509,6 +522,7 @@ void SettingsPage::saveAndEmit()
     }
     m_config.executableNames = userExes;
     m_config.useGameOverlay  = m_enableOverlay->isChecked();
+    m_config.defaultTab      = m_defaultTab->currentIndex();
     m_config.startMinimized  = m_startMinimized->isChecked();
     m_config.minimizeToTray  = m_minimizeToTray->isChecked();
     m_config.showGuildTags   = m_showGuildTags->isChecked();

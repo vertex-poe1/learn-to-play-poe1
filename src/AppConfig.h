@@ -26,6 +26,7 @@ struct AppConfig {
     bool useGameOverlay{true};
     bool autoUpdate{true};
     bool autoStartOnBoot{false};
+    int  defaultTab{1};          // 0=Past 1=Current 2=Chats 3=DMs
     bool startMinimized{false};
     bool minimizeToTray{true};
     bool autoDetectInstallDir{true};
