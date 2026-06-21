@@ -581,8 +581,14 @@ void ChatPage::rebuild()
         auto *btn = new QPushButton("Load previous 50 messages", content);
         btn->setFlat(true);
         connect(btn, &QPushButton::clicked, this, [this] {
+            const int prevMax   = m_scroll->verticalScrollBar()->maximum();
+            const int prevValue = m_scroll->verticalScrollBar()->value();
             m_limit += 50;
             rebuild();
+            QTimer::singleShot(0, this, [this, prevMax, prevValue] {
+                const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
+                m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+            });
         });
         layout->addWidget(btn);
     }
