@@ -11,6 +11,15 @@ ScrollJumpButton::ScrollJumpButton(QWidget *parent)
 {
     setFixedSize(54, 54);
     setCursor(Qt::PointingHandCursor);
+    setToolTip("Scroll to bottom");
+}
+
+void ScrollJumpButton::setSkipMode(bool skip)
+{
+    if (m_skipMode == skip) return;
+    m_skipMode = skip;
+    setToolTip(skip ? "Skip to bottom" : "Scroll to bottom");
+    update();
 }
 
 void ScrollJumpButton::enterEvent(QEnterEvent *e)
@@ -41,7 +50,10 @@ void ScrollJumpButton::paintEvent(QPaintEvent *)
     QPixmap pix(qRound(iconSize * dpr), qRound(iconSize * dpr));
     pix.setDevicePixelRatio(dpr);
     pix.fill(Qt::transparent);
-    { QPainter gp(&pix); QSvgRenderer(QStringLiteral(":/icons/arrow-down.svg")).render(&gp); }
+    const QString iconPath = m_skipMode
+        ? QStringLiteral(":/icons/chevron-bar-down.svg")
+        : QStringLiteral(":/icons/arrow-down.svg");
+    { QPainter gp(&pix); QSvgRenderer(iconPath).render(&gp); }
     { QPainter cp(&pix);
       cp.setCompositionMode(QPainter::CompositionMode_SourceIn);
       cp.fillRect(pix.rect(), Theme::textPrimary); }

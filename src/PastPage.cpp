@@ -267,6 +267,8 @@ void PastPage::jumpToLiveView()
 void PastPage::updateScrollDownBtn()
 {
     const auto *sb = m_scroll->verticalScrollBar();
-    const bool atBottom = sb->value() >= sb->maximum() - 4;
-    m_scrollDownBtn->setVisible(!atBottom);
+    const bool atBottom    = sb->value() >= sb->maximum() - 4;
+    const bool hasNextPage = m_windowOffset > 0;
+    m_scrollDownBtn->setSkipMode(hasNextPage);
+    m_scrollDownBtn->setVisible(!atBottom || hasNextPage);
 }

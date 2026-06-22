@@ -795,8 +795,11 @@ void DmPage::resizeEvent(QResizeEvent *e)
 void DmPage::updateScrollDownBtn()
 {
     const auto *sb = m_scroll->verticalScrollBar();
-    const bool atBottom = sb->value() >= sb->maximum() - 4;
-    m_scrollDownBtn->setVisible(m_view->currentIndex() == 0 && !atBottom);
+    const bool atBottom    = sb->value() >= sb->maximum() - 4;
+    const bool hasNextPage = m_windowOffset > 0;
+    const bool show        = m_view->currentIndex() == 0 && (!atBottom || hasNextPage);
+    m_scrollDownBtn->setSkipMode(hasNextPage);
+    m_scrollDownBtn->setVisible(show);
 }
 
 void DmPage::scrollToBottom()

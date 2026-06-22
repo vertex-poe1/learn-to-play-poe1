@@ -76,6 +76,7 @@ qt_add_resources(l2p-poe1 "svgicons"
         "${CMAKE_SOURCE_DIR}/assets/icons/arrow-down.svg"
         "${CMAKE_SOURCE_DIR}/assets/icons/chevron-bar-left.svg"
         "${CMAKE_SOURCE_DIR}/assets/icons/chevron-bar-right.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/chevron-bar-down.svg"
 )
 
 qt_add_resources(l2p-poe1 "brandsvg"
