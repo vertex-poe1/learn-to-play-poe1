@@ -54,6 +54,7 @@ private slots:
     void onTaskUpdated(int id);
     void onTabChanged(int index);
     void onGearClicked();
+    void onOrphanSessionsClosed(int count);
 
 private:
     void showWindow();
@@ -92,4 +93,5 @@ private:
 
     QPointer<LogIngestWorker> m_liveWorker;
     LiveEventRuleEngine      *m_ruleEngine{};
+    int                       m_orphanCloseTaskId{0};
 };

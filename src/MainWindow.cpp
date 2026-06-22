@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ScopedBudget.h"
 #include "ChatPage.h"
+#include "CloseOrphanSessionsWorker.h"
 #include "CurrentPage.h"
 #include "Database.h"
 #include "DmPage.h"
@@ -307,19 +308,37 @@ void MainWindow::onPollTimer()
                 }
             }
             if (!ingestActive) {
-                QElapsedTimer orphanTimer;
-                orphanTimer.start();
-                const int closed = m_db->closeOrphanSessions(m_runningInstallDirs);
-                const qint64 ms = orphanTimer.elapsed();
-                if (ms > 100 || closed > 0)
-                    qDebug() << "[poll] closeOrphanSessions closed=" << closed
-                             << "elapsed_ms=" << ms;
-                if (closed > 0)
-                    m_pastPage->markDirty();
+                // Don't queue another close task if the previous one is still pending/running.
+                bool orphanCloseActive = false;
+                for (const auto &t : m_taskManager->tasks()) {
+                    if (t.id == m_orphanCloseTaskId
+                            && (t.status == TaskStatus::Pending
+                                || t.status == TaskStatus::Running
+                                || t.status == TaskStatus::Monitoring)) {
+                        orphanCloseActive = true;
+                        break;
+                    }
+                }
+                if (!orphanCloseActive) {
+                    auto *worker = new CloseOrphanSessionsWorker(
+                        m_db->path(), m_runningInstallDirs);
+                    connect(worker, &CloseOrphanSessionsWorker::sessionsClosed,
+                            this,   &MainWindow::onOrphanSessionsClosed,
+                            Qt::QueuedConnection);
+                    m_orphanCloseTaskId = m_taskManager->submit(
+                        QStringLiteral("Close orphan sessions"),
+                        TaskKind::DbWrite, worker);
+                }
             }
         }
     }
 
+}
+
+void MainWindow::onOrphanSessionsClosed(int count)
+{
+    if (count > 0)
+        m_pastPage->markDirty();
 }
 
 void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason)

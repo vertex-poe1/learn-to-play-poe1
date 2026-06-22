@@ -13,6 +13,8 @@ qt_add_executable(l2p-poe1
     BackgroundWorker.h
     ChatPage.cpp
     ChatPage.h
+    CloseOrphanSessionsWorker.cpp
+    CloseOrphanSessionsWorker.h
     CurrentPage.cpp
     CurrentPage.h
     Database.cpp
