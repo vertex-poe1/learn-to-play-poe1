@@ -17,9 +17,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPainter>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStackedWidget>
+#include <QSvgRenderer>
 #include <QVBoxLayout>
 
 // ---------------------------------------------------------------------------
@@ -323,12 +326,29 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     auto *presentedByLabel = new QLabel("Presented by:", aboutContent);
     presentedByLabel->setAlignment(Qt::AlignCenter);
 
-    auto *vertexLabel = new QLabel("Vertex Industries", aboutContent);
+    auto *vertexRow = new QWidget(aboutContent);
     {
-        QFont f = vertexLabel->font();
-        f.setPointSizeF(Theme::fontXl);
-        vertexLabel->setFont(f);
-        vertexLabel->setAlignment(Qt::AlignCenter);
+        const int iconPx = qRound(Theme::fontXl * 1.5);
+        QPixmap iconPix(iconPx, iconPx);
+        iconPix.fill(Qt::transparent);
+        { QPainter gp(&iconPix); QSvgRenderer(QStringLiteral(":/brand/vertex-icon.svg")).render(&gp); }
+        auto *iconLabel = new QLabel(vertexRow);
+        iconLabel->setPixmap(iconPix);
+
+        auto *vertexLabel = new QLabel("Vertex Industries", vertexRow);
+        {
+            QFont f = vertexLabel->font();
+            f.setPointSizeF(Theme::fontXl);
+            vertexLabel->setFont(f);
+        }
+
+        auto *h = new QHBoxLayout(vertexRow);
+        h->setContentsMargins(0, 0, 0, 0);
+        h->setSpacing(Theme::spacingSm);
+        h->addStretch();
+        h->addWidget(iconLabel);
+        h->addWidget(vertexLabel);
+        h->addStretch();
     }
 
     auto *communityLabel = new QLabel("and the community", aboutContent);
@@ -340,7 +360,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     communityLabel->setAlignment(Qt::AlignCenter);
 
     aboutLayout->addWidget(presentedByLabel);
-    aboutLayout->addWidget(vertexLabel);
+    aboutLayout->addWidget(vertexRow);
     aboutLayout->addWidget(communityLabel);
     aboutLayout->addWidget(makeSep());
 

@@ -78,6 +78,13 @@ qt_add_resources(l2p-poe1 "svgicons"
         "${CMAKE_SOURCE_DIR}/assets/icons/chevron-bar-right.svg"
 )
 
+qt_add_resources(l2p-poe1 "brandsvg"
+    PREFIX "/brand"
+    BASE "${CMAKE_SOURCE_DIR}/assets/vertex-industries"
+    FILES
+        "${CMAKE_SOURCE_DIR}/assets/vertex-industries/vertex-icon.svg"
+)
+
 if (WIN32)
     target_sources(l2p-poe1 PRIVATE WindowTrackerWindows.cpp OverlayKeepalive.cpp OverlayKeepalive.h l2p-poe1.rc)
     target_link_libraries(l2p-poe1 PRIVATE psapi)
