@@ -6,7 +6,7 @@
 #include <QStringList>
 #include <QWidget>
 
-class LiveEvent;
+struct LiveEvent;
 class QueryService;
 class QLabel;
 class QPushButton;

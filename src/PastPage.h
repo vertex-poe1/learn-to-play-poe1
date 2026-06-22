@@ -5,7 +5,7 @@
 #include <QShowEvent>
 #include <QWidget>
 
-class LiveEvent;
+struct LiveEvent;
 class QueryService;
 class QScrollArea;
 class QVBoxLayout;

@@ -9,7 +9,7 @@
 #include <QResizeEvent>
 #include <QWidget>
 
-class LiveEvent;
+struct LiveEvent;
 class QueryService;
 class QPushButton;
 class QScrollArea;
