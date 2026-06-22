@@ -15,6 +15,7 @@ class QMenu;
 class ChatPage;
 class DmPage;
 class NavBar;
+class PastPage;
 class QTimer;
 class Database;
 class GameOverlay;
@@ -69,6 +70,7 @@ private:
     TaskPanel          *m_taskPanel{};
     ChatPage           *m_chatPage{};
     DmPage             *m_dmPage{};
+    PastPage           *m_pastPage{};
     NavBar             *m_navBar{};
     QStackedWidget     *m_stack{};
     QSystemTrayIcon    *m_tray{};

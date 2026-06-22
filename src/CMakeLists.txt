@@ -34,6 +34,8 @@ qt_add_executable(l2p-poe1
     DmPage.cpp
     DmPage.h
     MainWindow.cpp
+    PastPage.cpp
+    PastPage.h
     MainWindow.h
     NavBar.cpp
     NavBar.h

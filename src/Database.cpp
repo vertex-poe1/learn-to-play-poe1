@@ -785,3 +785,108 @@ int Database::upsertNpcDialogEntries(const QList<NpcDialogEntry> &entries)
     execSql(m_db, "COMMIT;");
     return inserted;
 }
+
+QList<Database::SessionRecord> Database::fetchSessions() const
+{
+    QList<SessionRecord> result;
+    if (!m_db) return result;
+
+    static const char *sql = R"(
+        SELECT s.id, s.started_at, s.ended_at, s.total_secs, s.active_secs,
+               a.name, c.name, cl.name
+        FROM sessions s
+        LEFT JOIN accounts a  ON s.account_id = a.id
+        LEFT JOIN characters c ON s.char_id   = c.id
+        LEFT JOIN classes cl   ON c.class_id  = cl.id
+        ORDER BY s.started_at ASC
+    )";
+
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return result;
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        SessionRecord r;
+        r.id = sqlite3_column_int64(stmt, 0);
+        if (auto *p = sqlite3_column_text(stmt, 1))
+            r.startedAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 2))
+            r.endedAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        r.totalSecs  = sqlite3_column_type(stmt, 3) != SQLITE_NULL
+                       ? sqlite3_column_int(stmt, 3) : -1;
+        r.activeSecs = sqlite3_column_type(stmt, 4) != SQLITE_NULL
+                       ? sqlite3_column_int(stmt, 4) : -1;
+        if (auto *p = sqlite3_column_text(stmt, 5))
+            r.accountName = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 6))
+            r.charName = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 7))
+            r.charClass = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        result.append(r);
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+QList<Database::SessionEventRecord> Database::fetchSessionEvents(int limit) const
+{
+    QList<SessionEventRecord> result;
+    if (!m_db) return result;
+
+    // UNION of session starts and session stops, most-recent first.
+    // Caller reverses to get chronological (ASC) display order.
+    static const char *sql = R"(
+        SELECT event_type, occurred_at, char_name, char_class, active_secs, total_secs
+        FROM (
+            SELECT 'start'     AS event_type,
+                   s.started_at AS occurred_at,
+                   c.name       AS char_name,
+                   cl.name      AS char_class,
+                   s.active_secs,
+                   s.total_secs
+            FROM sessions s
+            LEFT JOIN characters c ON s.char_id    = c.id
+            LEFT JOIN classes cl   ON c.class_id   = cl.id
+
+            UNION ALL
+
+            SELECT 'stop'    AS event_type,
+                   s.ended_at AS occurred_at,
+                   c.name     AS char_name,
+                   cl.name    AS char_class,
+                   s.active_secs,
+                   s.total_secs
+            FROM sessions s
+            LEFT JOIN characters c ON s.char_id    = c.id
+            LEFT JOIN classes cl   ON c.class_id   = cl.id
+            WHERE s.ended_at IS NOT NULL
+        )
+        ORDER BY occurred_at DESC
+        LIMIT ?
+    )";
+
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return result;
+    sqlite3_bind_int(stmt, 1, limit > 0 ? limit : -1);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        SessionEventRecord r;
+        if (auto *p = sqlite3_column_text(stmt, 0))
+            r.eventType  = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 1))
+            r.occurredAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 2))
+            r.charName   = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 3))
+            r.charClass  = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        r.activeSecs = sqlite3_column_type(stmt, 4) != SQLITE_NULL
+                       ? sqlite3_column_int(stmt, 4) : -1;
+        r.totalSecs  = sqlite3_column_type(stmt, 5) != SQLITE_NULL
+                       ? sqlite3_column_int(stmt, 5) : -1;
+        result.append(r);
+    }
+    sqlite3_finalize(stmt);
+    std::reverse(result.begin(), result.end());
+    return result;
+}

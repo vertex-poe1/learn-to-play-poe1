@@ -2,6 +2,7 @@
 #include "ChatPage.h"
 #include "Database.h"
 #include "DmPage.h"
+#include "PastPage.h"
 #include "GameOverlay.h"
 #include "LiveEventBus.h"
 #include "LiveEventRuleEngine.h"
@@ -53,10 +54,11 @@ MainWindow::MainWindow(QWidget *parent)
     currentLayout->addWidget(m_log, 1);
 
     m_stack    = new QStackedWidget(this);
+    m_pastPage = new PastPage(nullptr, this);
     m_chatPage = new ChatPage(nullptr, this);
     m_dmPage   = new DmPage(nullptr, this);
 
-    m_stack->addWidget(new QWidget()); // Past
+    m_stack->addWidget(m_pastPage);    // Past
     m_stack->addWidget(currentPage);   // Current
     m_stack->addWidget(m_chatPage);    // Chats
     m_stack->addWidget(m_dmPage);      // DMs
@@ -140,6 +142,7 @@ MainWindow::MainWindow(QWidget *parent)
         qDebug() << "[startup] scheduleLogIngestion";
         scheduleLogIngestion();
         qDebug() << "[startup] scheduleLogIngestion done in" << startupTimer.elapsed() << "ms";
+        m_pastPage->setDatabase(m_db);
         m_chatPage->setDatabase(m_db);
         m_chatPage->setShowGuildTags(m_config.showGuildTags);
         m_dmPage->setDatabase(m_db);
@@ -291,6 +294,7 @@ void MainWindow::onPollTimer()
         } else if (!m_gameFound && m_liveWorker) {
             // Game closed — drain any remaining log content then stop.
             stopLiveIngest();
+            m_pastPage->markDirty();
         }
     }
 }

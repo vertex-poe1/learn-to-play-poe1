@@ -53,6 +53,17 @@ public:
         QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
     };
 
+    struct SessionRecord {
+        qint64  id{-1};
+        QString startedAt;    // "YYYY-MM-DD HH:MM:SS"
+        QString endedAt;      // may be empty if session is still open
+        int     totalSecs{-1};
+        int     activeSecs{-1};
+        QString accountName;  // may be empty
+        QString charName;     // may be empty
+        QString charClass;    // may be empty
+    };
+
     // Inserts the install path if new; returns current state either way.
     InstallState upsertInstall(const QString &installPath);
 
@@ -85,6 +96,22 @@ public:
     // Returns distinct dates ("YYYY-MM-DD") that have data for the given filter,
     // most-recent first. Used to populate the filter panel date buckets.
     QStringList fetchChatDates(const QSet<QChar> &channels, bool includeDms) const;
+
+    // Returns all sessions ordered by started_at ASC, with joined account/char info.
+    QList<SessionRecord> fetchSessions() const;
+
+    struct SessionEventRecord {
+        QString eventType;   // "start" or "stop"
+        QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
+        QString charName;    // may be empty
+        QString charClass;   // may be empty
+        int     activeSecs{-1};
+        int     totalSecs{-1};
+    };
+
+    // Returns game-start and game-stop events as a flat chronological list.
+    // limit > 0 returns only the most recent N events.
+    QList<SessionEventRecord> fetchSessionEvents(int limit = 0) const;
 
 private:
     void applyPragmas();
