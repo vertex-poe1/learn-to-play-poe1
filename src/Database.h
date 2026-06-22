@@ -105,6 +105,7 @@ public:
         QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
         QString charName;    // may be empty
         QString charClass;   // may be empty
+        QString installPath; // installs.path — which Client.txt this came from
         int     activeSecs{-1};
         int     totalSecs{-1};
     };
@@ -112,6 +113,10 @@ public:
     // Returns game-start and game-stop events as a flat chronological list.
     // limit > 0 returns only the most recent N events.
     QList<SessionEventRecord> fetchSessionEvents(int limit = 0) const;
+
+    // Closes sessions with no ended_at whose install is NOT in runningInstallPaths.
+    // Uses datetime('now','localtime') as the end timestamp; returns count closed.
+    int closeOrphanSessions(const QStringList &runningInstallPaths);
 
     struct ZoneTransitionRecord {
         QString areaName;        // display_name, or code if display_name is absent

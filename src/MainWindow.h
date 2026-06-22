@@ -87,6 +87,7 @@ private:
     GameOverlay     *m_overlay{};
     bool             m_firstPoll{true};
     QSet<quint32>    m_runningPids;
+    QStringList      m_runningInstallDirs;
     QRect            m_lastGameRect;
 
     QPointer<LogIngestWorker> m_liveWorker;

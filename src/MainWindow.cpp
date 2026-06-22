@@ -235,6 +235,10 @@ void MainWindow::onPollTimer()
     if (m_firstPoll || newPids != m_runningPids) {
         m_firstPoll   = false;
         m_runningPids = newPids;
+        m_runningInstallDirs.clear();
+        for (const auto &s : states)
+            if (!s.installDir.isEmpty())
+                m_runningInstallDirs << s.installDir;
         refreshStatusBar();
         m_currentPage->setRunningGames(states);
     }
@@ -278,6 +282,22 @@ void MainWindow::onPollTimer()
             stopLiveIngest();
             m_pastPage->markDirty();
             m_currentPage->setDatabase(m_db);
+        }
+
+        // Close sessions for installs where the game is no longer running.
+        // Only run when no batch ingest is in flight so we're caught up with the log.
+        if (!m_liveWorker) {
+            bool ingestActive = false;
+            for (const auto &t : m_taskManager->tasks()) {
+                if (t.name.startsWith("Ingest ")
+                        && (t.status == TaskStatus::Pending
+                            || t.status == TaskStatus::Running)) {
+                    ingestActive = true;
+                    break;
+                }
+            }
+            if (!ingestActive && m_db->closeOrphanSessions(m_runningInstallDirs) > 0)
+                m_pastPage->markDirty();
         }
     }
 }
@@ -347,10 +367,12 @@ void MainWindow::onTaskUpdated(int id)
         if (r.id != id) continue;
         const QString t = QTime::currentTime().toString("HH:mm");
         if (r.status == TaskStatus::Finished || r.status == TaskStatus::Monitoring) {
-            if (r.name.startsWith("Ingest "))
+            if (r.name.startsWith("Ingest ")) {
                 setStatusContent(QString());   // let idle message take over
-            else
+                m_pastPage->markDirty();
+            } else {
                 setStatusContent(QStringLiteral("%1 · %2").arg(t, r.name));
+            }
         } else if (r.status == TaskStatus::Failed) {
             setStatusContent(QStringLiteral("%1 · Failed").arg(t));
         } else if (r.status == TaskStatus::Cancelled) {

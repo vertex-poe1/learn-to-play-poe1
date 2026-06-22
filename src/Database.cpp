@@ -836,15 +836,17 @@ QList<Database::SessionEventRecord> Database::fetchSessionEvents(int limit) cons
     // UNION of session starts and session stops, most-recent first.
     // Caller reverses to get chronological (ASC) display order.
     static const char *sql = R"(
-        SELECT event_type, occurred_at, char_name, char_class, active_secs, total_secs
+        SELECT event_type, occurred_at, char_name, char_class, install_path, active_secs, total_secs
         FROM (
             SELECT 'start'     AS event_type,
                    s.started_at AS occurred_at,
                    c.name       AS char_name,
                    cl.name      AS char_class,
+                   i.path       AS install_path,
                    s.active_secs,
                    s.total_secs
             FROM sessions s
+            JOIN installs i        ON s.install_id = i.id
             LEFT JOIN characters c ON s.char_id    = c.id
             LEFT JOIN classes cl   ON c.class_id   = cl.id
 
@@ -854,9 +856,11 @@ QList<Database::SessionEventRecord> Database::fetchSessionEvents(int limit) cons
                    s.ended_at AS occurred_at,
                    c.name     AS char_name,
                    cl.name    AS char_class,
+                   i.path     AS install_path,
                    s.active_secs,
                    s.total_secs
             FROM sessions s
+            JOIN installs i        ON s.install_id = i.id
             LEFT JOIN characters c ON s.char_id    = c.id
             LEFT JOIN classes cl   ON c.class_id   = cl.id
             WHERE s.ended_at IS NOT NULL
@@ -873,22 +877,83 @@ QList<Database::SessionEventRecord> Database::fetchSessionEvents(int limit) cons
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         SessionEventRecord r;
         if (auto *p = sqlite3_column_text(stmt, 0))
-            r.eventType  = QString::fromUtf8(reinterpret_cast<const char *>(p));
+            r.eventType   = QString::fromUtf8(reinterpret_cast<const char *>(p));
         if (auto *p = sqlite3_column_text(stmt, 1))
-            r.occurredAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+            r.occurredAt  = QString::fromUtf8(reinterpret_cast<const char *>(p));
         if (auto *p = sqlite3_column_text(stmt, 2))
-            r.charName   = QString::fromUtf8(reinterpret_cast<const char *>(p));
+            r.charName    = QString::fromUtf8(reinterpret_cast<const char *>(p));
         if (auto *p = sqlite3_column_text(stmt, 3))
-            r.charClass  = QString::fromUtf8(reinterpret_cast<const char *>(p));
-        r.activeSecs = sqlite3_column_type(stmt, 4) != SQLITE_NULL
-                       ? sqlite3_column_int(stmt, 4) : -1;
-        r.totalSecs  = sqlite3_column_type(stmt, 5) != SQLITE_NULL
+            r.charClass   = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 4))
+            r.installPath = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        r.activeSecs = sqlite3_column_type(stmt, 5) != SQLITE_NULL
                        ? sqlite3_column_int(stmt, 5) : -1;
+        r.totalSecs  = sqlite3_column_type(stmt, 6) != SQLITE_NULL
+                       ? sqlite3_column_int(stmt, 6) : -1;
         result.append(r);
     }
     sqlite3_finalize(stmt);
     std::reverse(result.begin(), result.end());
     return result;
+}
+
+int Database::closeOrphanSessions(const QStringList &runningInstallPaths)
+{
+    if (!m_db) return 0;
+
+    // Collect sessions that have no ended_at, along with their install path.
+    struct Dangling { qint64 id; QString installPath; };
+    QList<Dangling> dangling;
+
+    static const char *selectSql = R"(
+        SELECT s.id, i.path
+        FROM sessions s
+        JOIN installs i ON s.install_id = i.id
+        WHERE s.ended_at IS NULL
+    )";
+
+    sqlite3_stmt *sel = nullptr;
+    if (sqlite3_prepare_v2(m_db, selectSql, -1, &sel, nullptr) != SQLITE_OK)
+        return 0;
+    while (sqlite3_step(sel) == SQLITE_ROW) {
+        Dangling d;
+        d.id = sqlite3_column_int64(sel, 0);
+        if (auto *p = sqlite3_column_text(sel, 1))
+            d.installPath = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        dangling.append(d);
+    }
+    sqlite3_finalize(sel);
+
+    // Filter: skip sessions whose install is currently running.
+    QList<qint64> toClose;
+    for (const auto &d : dangling)
+        if (!runningInstallPaths.contains(d.installPath))
+            toClose.append(d.id);
+
+    if (toClose.isEmpty()) return 0;
+
+    // Close each orphaned session. We don't know the exact stop time, so we
+    // use the current local time and leave total_secs/active_secs as NULL.
+    // The AND ended_at IS NULL guard makes the update safe against concurrent writers.
+    static const char *updateSql = R"(
+        UPDATE sessions
+        SET ended_at = datetime('now', 'localtime')
+        WHERE id = ? AND ended_at IS NULL
+    )";
+
+    sqlite3_stmt *upd = nullptr;
+    if (sqlite3_prepare_v2(m_db, updateSql, -1, &upd, nullptr) != SQLITE_OK)
+        return 0;
+
+    int closed = 0;
+    for (qint64 sid : toClose) {
+        sqlite3_bind_int64(upd, 1, sid);
+        if (sqlite3_step(upd) == SQLITE_DONE && sqlite3_changes(m_db) > 0)
+            ++closed;
+        sqlite3_reset(upd);
+    }
+    sqlite3_finalize(upd);
+    return closed;
 }
 
 QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, int offset) const
