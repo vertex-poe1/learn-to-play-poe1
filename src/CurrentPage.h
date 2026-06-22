@@ -31,7 +31,7 @@ public:
                          const QString &message, const NotificationStyle &style = {});
 
 public slots:
-    void onLiveEvent(const LiveEvent &event);
+    void onLiveEvent(const LiveEvent &event, bool bulk);
 
 protected:
     void showEvent(QShowEvent *e) override;
@@ -64,7 +64,8 @@ private:
     QList<NotificationWidget *> m_dbZoneWidgets;
     QList<QWidget *>          m_liveEventWidgets;
     int                       m_dbZoneOffset{0};
-    static constexpr int      kDbZoneLimit = 50;
+    static constexpr int      kDbZoneLimit    = 50;
+    static constexpr int      kLiveWidgetCap  = 100;
 
     QList<WindowState>    m_runningGames;
     QMap<quint32, QString> m_detectedAt;  // pid → HH:mm when first detected

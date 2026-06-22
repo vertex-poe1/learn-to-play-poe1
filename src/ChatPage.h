@@ -29,7 +29,7 @@ public:
     void reload();
 
 public slots:
-    void onLiveChat(const LiveEvent &event);
+    void onLiveChat(const LiveEvent &event, bool bulk);
 
 protected:
     void showEvent(QShowEvent *e) override;

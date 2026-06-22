@@ -509,7 +509,7 @@ void ChatPage::showEvent(QShowEvent *e)
         reload();
 }
 
-void ChatPage::onLiveChat(const LiveEvent &event)
+void ChatPage::onLiveChat(const LiveEvent &event, bool bulk)
 {
     if (event.type == LiveEventType::Chat) {
         const QString ch = event.data.value("channel").toString();
@@ -522,6 +522,12 @@ void ChatPage::onLiveChat(const LiveEvent &event)
     }
 
     if (!isVisible()) { m_dirty = true; return; }
+
+    if (bulk) {
+        m_liveRebuildTimer->stop();
+        rebuild();
+        return;
+    }
 
     // Only auto-scroll if the view was already at the bottom and no date filter active.
     if (!m_liveRebuildTimer->isActive() && m_fromDate.isEmpty())

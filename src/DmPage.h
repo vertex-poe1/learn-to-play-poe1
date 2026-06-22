@@ -27,7 +27,7 @@ public:
     void reload();
 
 public slots:
-    void onLiveWhisper(const LiveEvent &event);
+    void onLiveWhisper(const LiveEvent &event, bool bulk);
 
 protected:
     void showEvent(QShowEvent *e) override;

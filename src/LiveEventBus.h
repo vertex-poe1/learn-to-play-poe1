@@ -2,7 +2,9 @@
 
 #include "LiveEvent.h"
 
+#include <QList>
 #include <QObject>
+#include <QTimer>
 #include <QVector>
 #include <functional>
 
@@ -26,10 +28,12 @@ public slots:
     void dispatch(const LiveEvent& event);
 
 signals:
-    void eventFired(const LiveEvent& event);
+    void eventFired(const LiveEvent &event, bool bulk);
 
 private:
-    LiveEventBus() = default;
+    explicit LiveEventBus();
+
+    void flush();
 
     struct Sub {
         int     id;
@@ -38,6 +42,8 @@ private:
     };
 
     static LiveEventBus* s_instance;
-    QVector<Sub> m_subs;
-    int          m_nextId{1};
+    QVector<Sub>     m_subs;
+    int              m_nextId{1};
+    QList<LiveEvent> m_pending;
+    QTimer          *m_flushTimer;
 };

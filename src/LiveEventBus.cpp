@@ -4,6 +4,14 @@
 
 LiveEventBus* LiveEventBus::s_instance = nullptr;
 
+LiveEventBus::LiveEventBus()
+    : m_flushTimer(new QTimer(this))
+{
+    m_flushTimer->setSingleShot(true);
+    m_flushTimer->setInterval(16);
+    connect(m_flushTimer, &QTimer::timeout, this, &LiveEventBus::flush);
+}
+
 LiveEventBus* LiveEventBus::instance()
 {
     if (!s_instance) {
@@ -30,9 +38,19 @@ void LiveEventBus::unsubscribe(int id)
 
 void LiveEventBus::dispatch(const LiveEvent& event)
 {
-    for (const Sub& sub : m_subs) {
-        if (sub.type.isEmpty() || sub.type == event.type)
-            sub.fn(event);
+    m_pending.append(event);
+    m_flushTimer->start(); // restart — 100ms from the most recent event
+}
+
+void LiveEventBus::flush()
+{
+    QList<LiveEvent> batch;
+    batch.swap(m_pending);
+    const bool bulk = batch.size() > 50;
+    for (const LiveEvent &event : batch) {
+        for (const Sub &sub : m_subs)
+            if (sub.type.isEmpty() || sub.type == event.type)
+                sub.fn(event);
+        emit eventFired(event, bulk);
     }
-    emit eventFired(event);
 }

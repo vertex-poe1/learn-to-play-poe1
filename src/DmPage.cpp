@@ -500,12 +500,18 @@ void DmPage::showEvent(QShowEvent *e)
         reload();
 }
 
-void DmPage::onLiveWhisper(const LiveEvent &event)
+void DmPage::onLiveWhisper(const LiveEvent &event, bool bulk)
 {
     if (event.type != LiveEventType::Whisper) return;
 
     if (!isVisible()) {
         m_dirty = true;
+        return;
+    }
+
+    if (bulk) {
+        m_liveRebuildTimer->stop();
+        rebuild();
         return;
     }
 

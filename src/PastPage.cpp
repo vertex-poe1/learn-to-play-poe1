@@ -120,9 +120,9 @@ void PastPage::resizeEvent(QResizeEvent *e)
                           rect().bottom() - m_scrollDownBtn->height() - Theme::spacingBase);
 }
 
-void PastPage::onLiveEvent(const LiveEvent &event)
+void PastPage::onLiveEvent(const LiveEvent &event, bool bulk)
 {
-    if (event.type == LiveEventType::SessionStart)
+    if (bulk || event.type == LiveEventType::SessionStart)
         m_dirty = true;
 }
 

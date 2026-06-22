@@ -664,6 +664,8 @@ void LogIngestWorker::start()
     int           chunkCount    = 0;
     int           totalVisits   = 0;
     bool          caughtUp      = false;
+    int           chunkCommits  = 0;
+    const qint64  ingestStart   = m_resumeOffset > 0 ? m_resumeOffset : 0;
 
     execSql(db, "BEGIN;");
 
@@ -1548,6 +1550,7 @@ void LogIngestWorker::start()
             const qint64 commitStart = wallClock.elapsed();
             flushSource(safeCommitPos);
             execSql(db, "COMMIT;");
+            ++chunkCommits;
             totalSize = qMax(totalSize, file.size());
             const int pct = totalSize > 0
                 ? static_cast<int>((file.pos() * 100LL) / totalSize) : 0;
@@ -1631,7 +1634,9 @@ void LogIngestWorker::start()
     sqlite3_close(db);
 
     qDebug() << "[ingest] done total_ms=" << wallClock.elapsed()
-             << "visits=" << totalVisits;
+             << "visits=" << totalVisits
+             << "avg_chunk_mb=" << QString::number(
+                    chunkCommits > 0 ? ((file.pos() - ingestStart) / 1048576.0) / chunkCommits : 0.0, 'f', 2);
     emit progress(100, QStringLiteral("%1 area visits").arg(totalVisits));
     emit finished();
 }

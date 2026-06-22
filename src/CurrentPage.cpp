@@ -162,8 +162,16 @@ void CurrentPage::addNotification(const QString &title, const QString &tag,
 // Live event handling
 // ---------------------------------------------------------------------------
 
-void CurrentPage::onLiveEvent(const LiveEvent &event)
+void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
 {
+    if (bulk) {
+        m_prevZoneCard = nullptr;
+        m_dirty = true;
+        if (isVisible() && m_queryService)
+            rebuildDbZones();
+        return;
+    }
+
     if (event.type == LiveEventType::AreaEntered) {
         const QString areaName  = event.data.value("area_name").toString();
         const int     areaLevel = event.data.value("area_level").toInt();
@@ -442,6 +450,12 @@ void CurrentPage::appendLiveWidget(QWidget *w)
 {
     const auto *sb = m_scroll->verticalScrollBar();
     const bool atBottom = sb->value() >= sb->maximum() - 4;
+
+    if (m_liveEventWidgets.size() >= kLiveWidgetCap) {
+        QWidget *oldest = m_liveEventWidgets.takeFirst();
+        m_contentLayout->removeWidget(oldest);
+        delete oldest;
+    }
 
     m_contentLayout->addWidget(w);
     m_liveEventWidgets.append(w);

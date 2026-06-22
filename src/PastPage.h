@@ -24,7 +24,7 @@ protected:
     void resizeEvent(QResizeEvent *e) override;
 
 private slots:
-    void onLiveEvent(const LiveEvent &event);
+    void onLiveEvent(const LiveEvent &event, bool bulk);
 
 private:
     void rebuild();
