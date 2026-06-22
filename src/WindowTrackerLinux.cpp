@@ -1,6 +1,8 @@
 #include "WindowTracker.h"
 
 #include <QFileInfo>
+#include <QList>
+#include <QSet>
 
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
@@ -35,22 +37,21 @@ static unsigned long getWindowPid(Display *dpy, Window win)
     return 0;
 }
 
-// Walks the X11 window tree rooted at `root`, looking for a window whose
-// owning process matches any name in `executableNames`.  Fills `out` on first match.
-static bool walkTree(Display *dpy, Window root, const QStringList &executableNames,
-                     WindowState &out)
+// Walks the X11 window tree rooted at `root`, collecting all windows whose
+// owning process matches any name in `executableNames`.
+static void walkTree(Display *dpy, Window root, const QStringList &executableNames,
+                     QList<WindowState> &results, QSet<quint32> &seenPids)
 {
     Window       rootReturn, parentReturn;
     Window      *children = nullptr;
     unsigned int nChildren = 0;
 
     if (!XQueryTree(dpy, root, &rootReturn, &parentReturn, &children, &nChildren))
-        return false;
+        return;
 
-    bool found = false;
-    for (unsigned int i = 0; i < nChildren && !found; ++i) {
+    for (unsigned int i = 0; i < nChildren; ++i) {
         unsigned long pid = getWindowPid(dpy, children[i]);
-        if (pid > 0) {
+        if (pid > 0 && !seenPids.contains(static_cast<quint32>(pid))) {
             const std::string exeLink = "/proc/" + std::to_string(pid) + "/exe";
             char buf[PATH_MAX]        = {};
             ssize_t len = ::readlink(exeLink.c_str(), buf, sizeof(buf) - 1);
@@ -62,18 +63,18 @@ static bool walkTree(Display *dpy, Window root, const QStringList &executableNam
                         XWindowAttributes attrs = {};
                         if (XGetWindowAttributes(dpy, children[i], &attrs)
                             && attrs.map_state == IsViewable) {
-                            // Translate origin to screen coordinates.
-                            int  sx = 0, sy = 0;
+                            int    sx = 0, sy = 0;
                             Window child;
                             XTranslateCoordinates(dpy, children[i],
                                                   XDefaultRootWindow(dpy),
                                                   0, 0, &sx, &sy, &child);
-                            out.found          = true;
-                            out.executableName = baseName;
-                            out.rect           = QRect(sx, sy, attrs.width, attrs.height);
-                            out.installDir     = QFileInfo(fullPath).absolutePath();
-                            out.pid            = static_cast<quint32>(pid);
-                            found              = true;
+                            WindowState state;
+                            state.executableName = baseName;
+                            state.rect           = QRect(sx, sy, attrs.width, attrs.height);
+                            state.installDir     = QFileInfo(fullPath).absolutePath();
+                            state.pid            = static_cast<quint32>(pid);
+                            seenPids.insert(state.pid);
+                            results.append(state);
                         }
                         break;
                     }
@@ -81,29 +82,28 @@ static bool walkTree(Display *dpy, Window root, const QStringList &executableNam
             }
         }
 
-        if (!found)
-            found = walkTree(dpy, children[i], executableNames, out);
+        walkTree(dpy, children[i], executableNames, results, seenPids);
     }
 
     if (children)
         XFree(children);
-    return found;
 }
 
 } // namespace
 
 class WindowTrackerLinux : public WindowTracker {
 public:
-    WindowState poll(const QStringList &executableNames) override
+    QList<WindowState> poll(const QStringList &executableNames) override
     {
-        WindowState state;
-        Display    *dpy = XOpenDisplay(nullptr);
+        QList<WindowState> results;
+        Display *dpy = XOpenDisplay(nullptr);
         if (!dpy)
-            return state;
+            return results;
 
-        walkTree(dpy, XDefaultRootWindow(dpy), executableNames, state);
+        QSet<quint32> seenPids;
+        walkTree(dpy, XDefaultRootWindow(dpy), executableNames, results, seenPids);
         XCloseDisplay(dpy);
-        return state;
+        return results;
     }
 };
 

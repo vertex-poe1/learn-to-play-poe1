@@ -224,62 +224,48 @@ void MainWindow::onPollTimer()
     const QStringList exeNames = m_config.executableNames.isEmpty()
         ? AppConfig::knownExes() : m_config.executableNames;
 
-    const WindowState state = m_tracker->poll(exeNames);
+    const QList<WindowState> states = m_tracker->poll(exeNames);
 
-    if (state.found) {
-        m_lastGameExeName = state.executableName;
-        m_lastGamePid     = state.pid;
+    QSet<quint32> newPids;
+    for (const auto &s : states)
+        newPids.insert(s.pid);
+
+    const bool anyRunning = !states.isEmpty();
+
+    if (m_firstPoll || newPids != m_runningPids) {
+        m_firstPoll   = false;
+        m_runningPids = newPids;
+        refreshStatusBar();
+        m_currentPage->setRunningGames(states);
     }
 
-    if (m_firstPoll) {
-        m_firstPoll = false;
-        m_gameFound = state.found;
-        refreshStatusBar();
-        if (state.found)
-            log("Game is running", "game",
-                QStringLiteral("{%1} with PID {%2} at {%3}")
-                    .arg(state.executableName)
-                    .arg(state.pid)
-                    .arg(state.installDir));
-    } else if (state.found != m_gameFound) {
-        m_gameFound = state.found;
-        refreshStatusBar();
-        if (state.found)
-            log("Game is running", "game",
-                QStringLiteral("{%1} with PID {%2} at {%3}")
-                    .arg(state.executableName)
-                    .arg(state.pid)
-                    .arg(state.installDir));
-        else
-            log(QStringLiteral("Game closed (%1).").arg(m_lastGamePid));
-    }
-
-    if (state.found && !state.rect.isNull()) {
-        m_lastGameRect = state.rect;
+    // Overlay — track the first detected window's rect.
+    const QRect firstRect = anyRunning ? states[0].rect : QRect{};
+    if (!firstRect.isNull()) {
+        m_lastGameRect = firstRect;
     } else if (m_lastGameRect.isNull()) {
-        // Default fallback rect used before the game has ever been seen.
         m_lastGameRect = QRect(0, 0, 1280, 720);
     }
-
     m_overlay->updateGameRect(m_lastGameRect);
-    m_overlay->setGameVisible(state.found && m_config.useGameOverlay);
+    m_overlay->setGameVisible(anyRunning && m_config.useGameOverlay);
 
-    if (state.found && m_config.autoDetectInstallDir
-        && !state.installDir.isEmpty()
-        && !m_config.installDirs.contains(state.installDir)) {
-        m_config.installDirs << state.installDir;
-        m_config.save();
-        log(QStringLiteral("Install directory auto-detected: %1").arg(state.installDir));
-        // The live-ingest block below will start watching since the game is running;
-        // nothing extra needed here for newly discovered dirs.
+    // Auto-detect install dirs for all running instances.
+    if (m_config.autoDetectInstallDir) {
+        for (const auto &s : states) {
+            if (!s.installDir.isEmpty() && !m_config.installDirs.contains(s.installDir)) {
+                m_config.installDirs << s.installDir;
+                m_config.save();
+                log(QStringLiteral("Install directory auto-detected: %1").arg(s.installDir));
+            }
+        }
     }
 
     if (m_db && m_db->isOpen()) {
-        if (m_gameFound && !m_liveWorker) {
+        if (anyRunning && !m_liveWorker) {
             // Game is running but we have no live tail — start one.
-            // Prefer the exact dir reported by the tracker; fall back to configured dirs.
-            const QStringList candidates = !state.installDir.isEmpty()
-                ? QStringList{state.installDir}
+            // Prefer the exact dir from the first detected instance; fall back to configured dirs.
+            const QStringList candidates = !states[0].installDir.isEmpty()
+                ? QStringList{states[0].installDir}
                 : m_config.installDirs;
             for (const QString &dir : candidates) {
                 if (QFileInfo::exists(dir + "/logs/Client.txt")) {
@@ -287,7 +273,7 @@ void MainWindow::onPollTimer()
                     break;
                 }
             }
-        } else if (!m_gameFound && m_liveWorker) {
+        } else if (!anyRunning && m_liveWorker) {
             // Game closed — drain any remaining log content then stop.
             stopLiveIngest();
             m_pastPage->markDirty();
@@ -383,7 +369,7 @@ void MainWindow::setStatusContent(const QString &content)
 void MainWindow::refreshStatusBar()
 {
     if (m_lastStatusContent.isEmpty()) {
-        m_statusLabel->setText(m_gameFound ? "Waiting for new game info" : "Waiting for game launch");
+        m_statusLabel->setText(!m_runningPids.isEmpty() ? "Waiting for new game info" : "Waiting for game launch");
     } else {
         m_statusLabel->setText(m_lastStatusContent);
     }

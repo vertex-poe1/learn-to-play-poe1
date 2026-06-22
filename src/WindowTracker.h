@@ -1,14 +1,15 @@
 #pragma once
 
+#include <QList>
 #include <QRect>
 #include <QString>
 #include <QStringList>
 
 struct WindowState {
-    bool     found{false};
     QRect    rect;
     QString  installDir;
-    QString  executableName; // which name from the candidates list was matched
+    QString  executableName;
+    QString  startedAt;   // "HH:mm" local time the process was created; empty if unavailable
     quint32  pid{0};
 };
 
@@ -16,9 +17,9 @@ class WindowTracker {
 public:
     virtual ~WindowTracker() = default;
 
-    // Returns current state of the target process window.
+    // Returns all currently-running instances of any named target process.
     // executableNames is a list of candidate bare filenames (e.g. "PathOfExile.exe").
-    virtual WindowState poll(const QStringList &executableNames) = 0;
+    virtual QList<WindowState> poll(const QStringList &executableNames) = 0;
 
     static WindowTracker *create();
 };

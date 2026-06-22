@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QPointer>
 #include <QRect>
+#include <QSet>
 #include <QSystemTrayIcon>
 
 class QLabel;
@@ -85,10 +86,8 @@ private:
     QTimer          *m_pollTimer{};
     GameOverlay     *m_overlay{};
     bool             m_firstPoll{true};
-    bool             m_gameFound{false};
+    QSet<quint32>    m_runningPids;
     QRect            m_lastGameRect;
-    QString          m_lastGameExeName;
-    quint32          m_lastGamePid{};
 
     QPointer<LogIngestWorker> m_liveWorker;
     LiveEventRuleEngine      *m_ruleEngine{};

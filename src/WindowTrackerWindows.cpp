@@ -8,12 +8,14 @@
 #include "WindowTracker.h"
 
 #include <QFileInfo>
+#include <QSet>
 
 namespace {
 
 struct EnumData {
     const QStringList &targets;
-    WindowState        result;
+    QSet<quint32>      seenPids;
+    QList<WindowState> results;
 };
 
 BOOL CALLBACK enumWindowsProc(HWND hwnd, LPARAM lParam)
@@ -26,6 +28,10 @@ BOOL CALLBACK enumWindowsProc(HWND hwnd, LPARAM lParam)
     if (!pid)
         return TRUE;
 
+    auto *data = reinterpret_cast<EnumData *>(lParam);
+    if (data->seenPids.contains(static_cast<quint32>(pid)))
+        return TRUE; // already recorded this PID via an earlier window
+
     HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!proc)
         return TRUE;
@@ -35,37 +41,46 @@ BOOL CALLBACK enumWindowsProc(HWND hwnd, LPARAM lParam)
     if (QueryFullProcessImageNameW(proc, 0, buf, &size)) {
         const QString fullPath = QString::fromWCharArray(buf, static_cast<int>(size));
         const QString baseName = QFileInfo(fullPath).fileName();
-        auto *data = reinterpret_cast<EnumData *>(lParam);
         for (const QString &target : data->targets) {
             if (baseName.compare(target, Qt::CaseInsensitive) == 0) {
-                data->result.found          = true;
-                data->result.executableName = baseName;
-                data->result.installDir     = QFileInfo(fullPath).absolutePath();
-                data->result.pid            = static_cast<quint32>(pid);
+                WindowState state;
+                state.executableName = baseName;
+                state.installDir     = QFileInfo(fullPath).absolutePath();
+                state.pid            = static_cast<quint32>(pid);
                 if (!IsIconic(hwnd)) {
                     RECT r = {};
                     GetWindowRect(hwnd, &r);
-                    data->result.rect = QRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
+                    state.rect = QRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
                 }
-                CloseHandle(proc);
-                return FALSE; // stop enumeration
+                FILETIME creation, exit, kernel, user;
+                if (GetProcessTimes(proc, &creation, &exit, &kernel, &user)) {
+                    SYSTEMTIME utc, local;
+                    FileTimeToSystemTime(&creation, &utc);
+                    SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local);
+                    state.startedAt = QStringLiteral("%1:%2")
+                        .arg(local.wHour,   2, 10, QChar('0'))
+                        .arg(local.wMinute, 2, 10, QChar('0'));
+                }
+                data->seenPids.insert(state.pid);
+                data->results.append(state);
+                break;
             }
         }
     }
 
     CloseHandle(proc);
-    return TRUE;
+    return TRUE; // continue — collect all matching PIDs
 }
 
 } // namespace
 
 class WindowTrackerWindows : public WindowTracker {
 public:
-    WindowState poll(const QStringList &executableNames) override
+    QList<WindowState> poll(const QStringList &executableNames) override
     {
-        EnumData data{executableNames, {}};
+        EnumData data{executableNames, {}, {}};
         EnumWindows(enumWindowsProc, reinterpret_cast<LPARAM>(&data));
-        return data.result;
+        return data.results;
     }
 };
 

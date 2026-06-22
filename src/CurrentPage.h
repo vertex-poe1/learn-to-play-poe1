@@ -1,8 +1,11 @@
 #pragma once
 
 #include "NotificationWidget.h"
+#include "WindowTracker.h"
 
 #include <QList>
+#include <QMap>
+#include <QResizeEvent>
 #include <QWidget>
 
 class Database;
@@ -10,6 +13,7 @@ class LiveEvent;
 class QPushButton;
 class QScrollArea;
 class QVBoxLayout;
+class ScrollJumpButton;
 
 class CurrentPage : public QWidget
 {
@@ -18,6 +22,7 @@ public:
     explicit CurrentPage(QWidget *parent = nullptr);
 
     void setDatabase(Database *db);
+    void setRunningGames(const QList<WindowState> &games);
 
     void addNotification(const QString &message, const NotificationStyle &style = {});
     void addNotification(const QString &title, const QString &tag,
@@ -28,6 +33,7 @@ public slots:
 
 protected:
     void showEvent(QShowEvent *e) override;
+    void resizeEvent(QResizeEvent *e) override;
 
 private slots:
     void onLoadMore();
@@ -36,9 +42,12 @@ private:
     void rebuildDbZones();
     NotificationWidget *makeZoneCard(const QString &areaName, int areaLevel,
                                      const QString &timestamp, int durationSecs);
-    void insertDbZone(NotificationWidget *card);
+    void appendDbZone(NotificationWidget *card);
     void setLoadMoreVisible(bool visible);
-    void prependWidget(QWidget *w);
+    void appendLiveWidget(QWidget *w);
+    void scrollToBottom();
+    void updateScrollDownBtn();
+    void onScrollRangeChanged(int min, int max);
 
     QScrollArea    *m_scroll{};
     QWidget        *m_content{};
@@ -47,9 +56,19 @@ private:
 
     QPushButton              *m_loadMoreBtn{};
     QList<NotificationWidget *> m_dbZoneWidgets;
+    QList<QWidget *>          m_liveEventWidgets;
     int                       m_dbZoneOffset{0};
     static constexpr int      kDbZoneLimit = 50;
-    bool                      m_dirty{false};
 
-    NotificationWidget *m_prevZoneCard{};
+    QList<WindowState>    m_runningGames;
+    QMap<quint32, QString> m_detectedAt;  // pid → HH:mm when first detected
+
+    bool                      m_dirty{false};
+    // -1 = none; 0 = go to bottom; >0 = go to (max - value) to restore position
+    int                       m_pendingScrollTo{-1};
+    QTimer                   *m_scrollSettleTimer{};
+
+    NotificationWidget  *m_prevZoneCard{};
+    QWidget             *m_sessionStartCard{};
+    ScrollJumpButton    *m_scrollDownBtn{};
 };
