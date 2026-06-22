@@ -1,6 +1,6 @@
 #include "ChatPage.h"
-#include "ScopedBudget.h"
 #include "Database.h"
+#include "QueryService.h"
 #include "ScrollJumpButton.h"
 #include "Theme.h"
 #include "LiveEvent.h"
@@ -9,8 +9,6 @@
 #include <functional>
 #include <QCheckBox>
 #include <QDate>
-#include <QDebug>
-#include <QElapsedTimer>
 #include <QEnterEvent>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -323,8 +321,8 @@ private:
 
 // ---- ChatPage ---------------------------------------------------------------
 
-ChatPage::ChatPage(Database *db, QWidget *parent)
-    : QWidget(parent), m_db(db)
+ChatPage::ChatPage(QWidget *parent)
+    : QWidget(parent)
 {
     // ---- Checkbox row -------------------------------------------------------
     m_cbLocal  = new QCheckBox("Local",  this);
@@ -465,9 +463,7 @@ ChatPage::ChatPage(Database *db, QWidget *parent)
     m_liveRebuildTimer->setInterval(300);
     connect(m_liveRebuildTimer, &QTimer::timeout, this, [this] {
         if (!isVisible()) { m_dirty = true; return; }
-        rebuild();
-        if (m_liveRebuildScrollToBottom)
-            QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+        rebuild(); // scroll-to-bottom handled in applyChats via m_liveRebuildScrollToBottom
     });
 
     connect(LiveEventBus::instance(), &LiveEventBus::eventFired,
@@ -485,16 +481,16 @@ ChatPage::ChatPage(Database *db, QWidget *parent)
             this, [this](int) { updateScrollDownBtn(); });
 }
 
-void ChatPage::setDatabase(Database *db)
+void ChatPage::setQueryService(QueryService *qs)
 {
-    m_db = db;
+    m_queryService = qs;
 }
 
 void ChatPage::setShowGuildTags(bool show)
 {
     if (m_showGuildTags == show) return;
     m_showGuildTags = show;
-    if (isVisible() && m_db) rebuild();
+    if (isVisible() && m_queryService) rebuild();
     else m_dirty = true;
 }
 
@@ -509,7 +505,7 @@ void ChatPage::reload()
 void ChatPage::showEvent(QShowEvent *e)
 {
     QWidget::showEvent(e);
-    if (m_dirty && m_db)
+    if (m_dirty && m_queryService)
         reload();
 }
 
@@ -562,17 +558,24 @@ void ChatPage::updateFilterLabel()
 
 void ChatPage::rebuild()
 {
-    ScopedBudget budget("ChatPage::rebuild");
-    if (!m_db) return;
+    if (!m_queryService) return;
+    if (m_rebuildInFlight) { m_dirty = true; return; }
+    m_dirty           = false;
+    m_rebuildInFlight = true;
 
-    QElapsedTimer t; t.start();
+    const QSet<QChar> channels  = activeChannels();
+    const bool        includeDms = m_cbDm->isChecked();
 
-    const QList<Database::ChatRecord> records =
-        m_db->fetchChats(activeChannels(), m_cbDm->isChecked(),
-                         m_limit, m_fromDate, m_toDate);
+    m_queryService->fetchChats(channels, includeDms, m_limit, m_fromDate, m_toDate,
+        [this](QList<Database::ChatRecord> records) {
+            m_rebuildInFlight = false;
+            applyChats(records);
+            if (m_dirty) rebuild();
+        });
+}
 
-    qDebug() << "[ChatPage] fetchChats" << records.size() << "rows in" << t.elapsed() << "ms";
-
+void ChatPage::applyChats(const QList<Database::ChatRecord> &records)
+{
     auto *content = new QWidget;
     auto *layout  = new QVBoxLayout(content);
     layout->setContentsMargins(0, Theme::spacingSm, 0, Theme::spacingSm);
@@ -583,14 +586,10 @@ void ChatPage::rebuild()
         auto *btn = new QPushButton("Load previous 50 messages", content);
         btn->setFlat(true);
         connect(btn, &QPushButton::clicked, this, [this] {
-            const int prevMax   = m_scroll->verticalScrollBar()->maximum();
-            const int prevValue = m_scroll->verticalScrollBar()->value();
+            m_scrollRestorePrevMax   = m_scroll->verticalScrollBar()->maximum();
+            m_scrollRestorePrevValue = m_scroll->verticalScrollBar()->value();
             m_limit += 50;
             rebuild();
-            QTimer::singleShot(0, this, [this, prevMax, prevValue] {
-                const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
-                m_scroll->verticalScrollBar()->setValue(prevValue + delta);
-            });
         });
         layout->addWidget(btn);
     }
@@ -604,28 +603,44 @@ void ChatPage::rebuild()
             layout->addWidget(new DateSeparator(date, content));
         }
         const QString timeLabel = (date == today)
-            ? r.occurredAt.mid(11, 5)   // HH:MM
-            : r.occurredAt.left(16);    // YYYY-MM-DD HH:MM
+            ? r.occurredAt.mid(11, 5)
+            : r.occurredAt.left(16);
         const QString guild = m_showGuildTags ? r.guildTag : QString{};
         layout->addWidget(
             new ChatRow(r.channel, r.playerName, guild, r.message, timeLabel, content));
     }
 
-    qDebug() << "[ChatPage] rebuild done in" << t.elapsed() << "ms";
     delete m_content;
     m_content       = content;
     m_contentLayout = layout;
     m_scroll->setWidget(m_content);
+
+    if (m_scrollRestorePrevMax >= 0) {
+        const int prevMax   = m_scrollRestorePrevMax;
+        const int prevValue = m_scrollRestorePrevValue;
+        m_scrollRestorePrevMax = -1;
+        QTimer::singleShot(0, this, [this, prevMax, prevValue] {
+            const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
+            m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+        });
+    } else if (m_liveRebuildScrollToBottom) {
+        m_liveRebuildScrollToBottom = false;
+        QTimer::singleShot(0, this, &ChatPage::scrollToBottom);
+    }
 }
 
 void ChatPage::openFilterPanel()
 {
-    if (!m_db) return;
-    m_cachedDates = m_db->fetchChatDates(activeChannels(), m_cbDm->isChecked());
-    m_filterPath.clear();
-    refreshFilterPanel();
-    m_filterScroll->verticalScrollBar()->setValue(0);
-    m_view->setCurrentIndex(1);
+    if (!m_queryService) return;
+    const QSet<QChar> channels   = activeChannels();
+    const bool        includeDms = m_cbDm->isChecked();
+    m_queryService->fetchChatDates(channels, includeDms, [this](QStringList dates) {
+        m_cachedDates = std::move(dates);
+        m_filterPath.clear();
+        refreshFilterPanel();
+        m_filterScroll->verticalScrollBar()->setValue(0);
+        m_view->setCurrentIndex(1);
+    });
 }
 
 void ChatPage::refreshFilterPanel()

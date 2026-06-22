@@ -1,15 +1,13 @@
 #include "PastPage.h"
-#include "ScopedBudget.h"
 #include "Database.h"
 #include "LiveEvent.h"
+#include "QueryService.h"
 #include "LiveEventBus.h"
 #include "NotificationWidget.h"
 #include "ScrollJumpButton.h"
 #include "Theme.h"
 
 #include <QDate>
-#include <QDebug>
-#include <QElapsedTimer>
 #include <QLabel>
 #include <QPainter>
 #include <QPushButton>
@@ -65,8 +63,8 @@ static QString formatDuration(int secs)
 
 // ---- PastPage ---------------------------------------------------------------
 
-PastPage::PastPage(Database *db, QWidget *parent)
-    : QWidget(parent), m_db(db)
+PastPage::PastPage(QWidget *parent)
+    : QWidget(parent)
 {
     m_scroll = new QScrollArea(this);
     m_scroll->setWidgetResizable(true);
@@ -96,11 +94,11 @@ PastPage::PastPage(Database *db, QWidget *parent)
             this, &PastPage::onLiveEvent);
 }
 
-void PastPage::setDatabase(Database *db)
+void PastPage::setQueryService(QueryService *qs)
 {
-    m_db    = db;
-    m_limit = 100;
-    m_dirty = true;
+    m_queryService = qs;
+    m_limit        = 100;
+    m_dirty        = true;
 }
 
 void PastPage::markDirty()
@@ -111,7 +109,7 @@ void PastPage::markDirty()
 void PastPage::showEvent(QShowEvent *e)
 {
     QWidget::showEvent(e);
-    if (m_dirty && m_db)
+    if (m_dirty && m_queryService)
         rebuild();
 }
 
@@ -130,14 +128,21 @@ void PastPage::onLiveEvent(const LiveEvent &event)
 
 void PastPage::rebuild()
 {
-    ScopedBudget budget("PastPage::rebuild");
-    if (!m_db) return;
-    m_dirty = false;
+    if (!m_queryService) return;
+    if (m_rebuildInFlight) { m_dirty = true; return; }
+    m_dirty           = false;
+    m_rebuildInFlight = true;
 
-    QElapsedTimer t; t.start();
-    const QList<Database::SessionEventRecord> events = m_db->fetchSessionEvents(m_limit);
-    qDebug() << "[PastPage] fetchSessionEvents" << events.size() << "rows in" << t.elapsed() << "ms";
+    m_queryService->fetchSessionEvents(m_limit,
+        [this](QList<Database::SessionEventRecord> events) {
+            m_rebuildInFlight = false;
+            applySessionEvents(events);
+            if (m_dirty) rebuild();
+        });
+}
 
+void PastPage::applySessionEvents(const QList<Database::SessionEventRecord> &events)
+{
     auto *content = new QWidget;
     auto *layout  = new QVBoxLayout(content);
     layout->setContentsMargins(Theme::spacingSm, Theme::spacingSm,
@@ -149,14 +154,10 @@ void PastPage::rebuild()
         auto *btn = new QPushButton("Load previous 50 notifications", content);
         btn->setFlat(true);
         connect(btn, &QPushButton::clicked, this, [this] {
-            const int prevMax   = m_scroll->verticalScrollBar()->maximum();
-            const int prevValue = m_scroll->verticalScrollBar()->value();
+            m_scrollRestorePrevMax   = m_scroll->verticalScrollBar()->maximum();
+            m_scrollRestorePrevValue = m_scroll->verticalScrollBar()->value();
             m_limit += 50;
             rebuild();
-            QTimer::singleShot(0, this, [this, prevMax, prevValue] {
-                const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
-                m_scroll->verticalScrollBar()->setValue(prevValue + delta);
-            });
         });
         layout->addWidget(btn);
     }
@@ -209,13 +210,22 @@ void PastPage::rebuild()
         }
     }
 
-    qDebug() << "[PastPage] rebuild done in" << t.elapsed() << "ms";
     delete m_content;
     m_content       = content;
     m_contentLayout = layout;
     m_scroll->setWidget(m_content);
 
-    QTimer::singleShot(0, this, &PastPage::scrollToBottom);
+    if (m_scrollRestorePrevMax >= 0) {
+        const int prevMax   = m_scrollRestorePrevMax;
+        const int prevValue = m_scrollRestorePrevValue;
+        m_scrollRestorePrevMax = -1;
+        QTimer::singleShot(0, this, [this, prevMax, prevValue] {
+            const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
+            m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+        });
+    } else {
+        QTimer::singleShot(0, this, &PastPage::scrollToBottom);
+    }
 }
 
 void PastPage::scrollToBottom()

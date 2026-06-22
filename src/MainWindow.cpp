@@ -6,6 +6,7 @@
 #include "Database.h"
 #include "DmPage.h"
 #include "PastPage.h"
+#include "QueryService.h"
 #include "GameOverlay.h"
 #include "LiveEventBus.h"
 #include "LiveEventRuleEngine.h"
@@ -52,9 +53,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_taskPanel = new TaskPanel(m_taskManager, this);
 
     m_stack    = new QStackedWidget(this);
-    m_pastPage = new PastPage(nullptr, this);
-    m_chatPage = new ChatPage(nullptr, this);
-    m_dmPage   = new DmPage(nullptr, this);
+    m_pastPage = new PastPage(this);
+    m_chatPage = new ChatPage(this);
+    m_dmPage   = new DmPage(this);
 
     m_stack->addWidget(m_pastPage);    // Past
     m_stack->addWidget(m_currentPage); // Current
@@ -140,11 +141,12 @@ MainWindow::MainWindow(QWidget *parent)
         qDebug() << "[startup] scheduleLogIngestion";
         scheduleLogIngestion();
         qDebug() << "[startup] scheduleLogIngestion done in" << startupTimer.elapsed() << "ms";
-        m_currentPage->setDatabase(m_db);
-        m_pastPage->setDatabase(m_db);
-        m_chatPage->setDatabase(m_db);
+        m_queryService = new QueryService(m_db->path(), this);
+        m_currentPage->setQueryService(m_queryService);
+        m_pastPage->setQueryService(m_queryService);
+        m_chatPage->setQueryService(m_queryService);
         m_chatPage->setShowGuildTags(m_config.showGuildTags);
-        m_dmPage->setDatabase(m_db);
+        m_dmPage->setQueryService(m_queryService);
         m_dmPage->setShowGuildTags(m_config.showGuildTags);
     } else {
         log("Database error", "db", m_db->lastError());
@@ -291,7 +293,7 @@ void MainWindow::onPollTimer()
             // Game closed — drain any remaining log content then stop.
             stopLiveIngest();
             m_pastPage->markDirty();
-            m_currentPage->setDatabase(m_db);
+            m_currentPage->markDirty();
         }
 
         // Close sessions for installs where the game is no longer running.

@@ -1,14 +1,12 @@
 #include "CurrentPage.h"
-#include "ScopedBudget.h"
 #include "Database.h"
 #include "LiveEvent.h"
 #include "LiveEventBus.h"
+#include "QueryService.h"
 #include "ScrollJumpButton.h"
 #include "Theme.h"
 
 #include <QDateTime>
-#include <QDebug>
-#include <QElapsedTimer>
 #include <QFrame>
 #include <QPushButton>
 #include <QScrollArea>
@@ -93,9 +91,14 @@ CurrentPage::CurrentPage(QWidget *parent)
             this, &CurrentPage::onLiveEvent);
 }
 
-void CurrentPage::setDatabase(Database *db)
+void CurrentPage::setQueryService(QueryService *qs)
 {
-    m_db    = db;
+    m_queryService = qs;
+    m_dirty        = true;
+}
+
+void CurrentPage::markDirty()
+{
     m_dirty = true;
 }
 
@@ -118,14 +121,14 @@ void CurrentPage::setRunningGames(const QList<WindowState> &games)
 
     m_runningGames = games;
     m_dirty = true;
-    if (isVisible() && m_db)
+    if (isVisible() && m_queryService)
         rebuildDbZones();
 }
 
 void CurrentPage::showEvent(QShowEvent *e)
 {
     QWidget::showEvent(e);
-    if (m_dirty && m_db)
+    if (m_dirty && m_queryService)
         rebuildDbZones();
 }
 
@@ -165,13 +168,19 @@ void CurrentPage::onLiveEvent(const LiveEvent &event)
         const QString areaName  = event.data.value("area_name").toString();
         const int     areaLevel = event.data.value("area_level").toInt();
 
-        // Stamp the previous zone's card with the time spent there.
-        if (m_prevZoneCard && m_db) {
-            // The worker closes span N-1 before emitting AreaEntered for span N,
-            // so fetchZoneTransitions(2, 0) gives [new zone, previous zone].
-            const auto recent = m_db->fetchZoneTransitions(2, 0);
-            if (recent.size() >= 2 && recent[1].durationSecs > 0)
-                m_prevZoneCard->setMessage(formatDuration(recent[1].durationSecs));
+        // Stamp the previous zone's card with the time spent there. The ingest worker
+        // closes span N-1 before emitting AreaEntered for span N, so the two most
+        // recent transitions are [new zone, previous zone].
+        if (m_prevZoneCard && m_queryService) {
+            NotificationWidget *prevCard = m_prevZoneCard;
+            m_queryService->fetchZoneTransitions(2, 0,
+                [this, prevCard](QList<Database::ZoneTransitionRecord> zones) {
+                    // m_prevZoneCard may have changed by the time this fires; use
+                    // the captured pointer (still valid — still in m_dbZoneWidgets or
+                    // m_liveEventWidgets) to stamp it directly.
+                    if (zones.size() >= 2 && zones[1].durationSecs > 0)
+                        prevCard->setMessage(formatDuration(zones[1].durationSecs));
+                });
         }
 
         const QString ts = QDateTime::currentDateTime().toString("HH:mm");
@@ -181,7 +190,7 @@ void CurrentPage::onLiveEvent(const LiveEvent &event)
 
     } else if (event.type == LiveEventType::SessionStart) {
         m_dirty = true;
-        if (isVisible() && m_db)
+        if (isVisible() && m_queryService)
             rebuildDbZones();
     }
 }
@@ -192,35 +201,35 @@ void CurrentPage::onLiveEvent(const LiveEvent &event)
 
 void CurrentPage::rebuildDbZones()
 {
-    ScopedBudget budget("CurrentPage::rebuildDbZones");
-    if (!m_db) return;
-    m_dirty = false;
+    if (!m_queryService) return;
+    if (m_rebuildInFlight) { m_dirty = true; return; }
+    m_dirty           = false;
+    m_rebuildInFlight = true;
 
-    // Capture distance from the bottom before we tear down the content.
-    // -1 means there was no scrollable content yet (initial load) → go to bottom.
+    // Capture scroll state and running-games snapshot before the async gap.
     const auto *sb = m_scroll->verticalScrollBar();
     const int prevMax        = sb->maximum();
     const int distFromBottom = prevMax > 0 ? (prevMax - sb->value()) : -1;
 
-    // Suppress repaints during the clear+rebuild so the user never sees the
-    // intermediate empty state or an incorrect scroll position.
+    const QList<WindowState>    runningGames = m_runningGames;
+    const QMap<quint32, QString> detectedAt  = m_detectedAt;
+
+    // Clear live and zone widgets now (before the fetch) so the user never sees
+    // a stale zone list. Suppress repaints until we rebuild.
     m_scroll->setUpdatesEnabled(false);
 
-    // Clear live event widgets.
     for (QWidget *w : m_liveEventWidgets) {
         m_contentLayout->removeWidget(w);
         delete w;
     }
     m_liveEventWidgets.clear();
 
-    // Clear the session start container.
     if (m_sessionStartCard) {
         m_contentLayout->removeWidget(m_sessionStartCard);
         delete m_sessionStartCard;
         m_sessionStartCard = nullptr;
     }
 
-    // Remove all previously loaded DB zone/session widgets.
     for (NotificationWidget *w : m_dbZoneWidgets) {
         m_contentLayout->removeWidget(w);
         delete w;
@@ -231,9 +240,32 @@ void CurrentPage::rebuildDbZones()
 
     setLoadMoreVisible(false);
 
+    // Determine how many session events we need:
+    //   single client: 1 (for game-card enrichment)
+    //   multi-client:  50 (interleaved with zones)
+    //   no games:       0
+    const int sessionLimit = runningGames.size() == 1 ? 1
+                           : runningGames.size()  > 1 ? 50 : 0;
+
+    m_queryService->fetchCurrentPageData(sessionLimit, kDbZoneLimit,
+        [this, distFromBottom, runningGames, detectedAt](QueryService::CurrentPageData data) {
+            m_rebuildInFlight = false;
+            applyCurrentPageData(data, runningGames, detectedAt, distFromBottom);
+            if (m_dirty) rebuildDbZones();
+        });
+}
+
+void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data,
+                                        const QList<WindowState> &runningGames,
+                                        const QMap<quint32, QString> &detectedAt,
+                                        int distFromBottom)
+{
+    const auto &sessionEvents = data.sessionEvents;
+    const auto &zones         = data.zones;
+
     // --- Session-running card(s) at the top ---
-    if (!m_runningGames.isEmpty()) {
-        const bool singleClient = (m_runningGames.size() == 1);
+    if (!runningGames.isEmpty()) {
+        const bool singleClient = (runningGames.size() == 1);
 
         auto *container = new QWidget(m_content);
         auto *cl = new QVBoxLayout(container);
@@ -241,39 +273,29 @@ void CurrentPage::rebuildDbZones()
         cl->setSpacing(6);
 
         if (singleClient) {
-            // Single client: timestamp comes from the Windows process start time.
-            // Enrich message with char name/class from DB once the log is parsed.
-            const auto &g = m_runningGames[0];
+            const auto &g = runningGames[0];
             QString msg = QStringLiteral("{%1} · PID {%2}").arg(g.executableName).arg(g.pid);
             if (!g.installDir.isEmpty())
                 msg += QStringLiteral(" · {%1}").arg(g.installDir);
-            const QString ts = g.startedAt.isEmpty() ? m_detectedAt.value(g.pid) : g.startedAt;
+            const QString ts = g.startedAt.isEmpty() ? detectedAt.value(g.pid) : g.startedAt;
 
-            QElapsedTimer seTimer; seTimer.start();
-            const auto sessionEvents = m_db->fetchSessionEvents(1);
-            const qint64 seMs = seTimer.elapsed();
-            if (seMs > 20)
-                qDebug() << "[CurrentPage] fetchSessionEvents(1) took" << seMs << "ms";
             if (!sessionEvents.isEmpty()
                     && sessionEvents.last().eventType == QLatin1String("start")) {
                 const auto &ev = sessionEvents.last();
                 if (!ev.charName.isEmpty()) {
                     msg = ev.charName;
                     if (!ev.charClass.isEmpty())
-                        msg += " · " + ev.charClass;
+                        msg += " \xc2\xb7 " + ev.charClass;
                 }
             }
-
             cl->addWidget(new NotificationWidget(
                 "Game is running", {}, msg, ts, sessionStyle(), container));
         } else {
-            // Multiple clients: one card per PID. Timestamp = Windows process start time.
-            // No DB enrichment — can't map DB sessions to PIDs reliably.
-            for (const auto &g : m_runningGames) {
+            for (const auto &g : runningGames) {
                 QString msg = QStringLiteral("{%1} · PID {%2}").arg(g.executableName).arg(g.pid);
                 if (!g.installDir.isEmpty())
                     msg += QStringLiteral(" · {%1}").arg(g.installDir);
-                const QString ts = g.startedAt.isEmpty() ? m_detectedAt.value(g.pid) : g.startedAt;
+                const QString ts = g.startedAt.isEmpty() ? detectedAt.value(g.pid) : g.startedAt;
                 cl->addWidget(new NotificationWidget(
                     "Game is running", {}, msg, ts, sessionStyle(), container));
             }
@@ -284,26 +306,17 @@ void CurrentPage::rebuildDbZones()
     }
 
     // --- Zone (and session-start) cards ---
-    QElapsedTimer zoneTimer; zoneTimer.start();
-    const auto zones = m_db->fetchZoneTransitions(kDbZoneLimit, 0);
-    const qint64 zoneMs = zoneTimer.elapsed();
-    if (zoneMs > 50)
-        qDebug() << "[CurrentPage] fetchZoneTransitions" << zones.size() << "rows in" << zoneMs << "ms";
-    m_dbZoneOffset   = zones.size();
+    m_dbZoneOffset = zones.size();
 
-    if (m_runningGames.size() > 1) {
-        // Multi-client: interleave "Game started" session events with zone transitions
-        // so the player can see which session each zone block belongs to.
+    if (runningGames.size() > 1) {
         QList<Database::SessionEventRecord> sessionStarts;
-        for (const auto &ev : m_db->fetchSessionEvents(50)) {
+        for (const auto &ev : sessionEvents) {
             if (ev.eventType == QLatin1String("start"))
                 sessionStarts.append(ev);
         }
 
-        // zones[zones.size()-1] is oldest, zones[0] is newest (DESC fetch).
-        // sessionStarts is already ASC (oldest first).
         NotificationWidget *lastZoneCard = nullptr;
-        int zi = zones.size() - 1; // index walking toward 0 (newest)
+        int zi = zones.size() - 1;
         int si = 0;
 
         while (zi >= 0 || si < sessionStarts.size()) {
@@ -326,7 +339,7 @@ void CurrentPage::rebuildDbZones()
                 if (!ev.charName.isEmpty()) {
                     msg = ev.charName;
                     if (!ev.charClass.isEmpty())
-                        msg += " · " + ev.charClass;
+                        msg += " \xc2\xb7 " + ev.charClass;
                 }
                 auto *card = new NotificationWidget(
                     "Game started", {}, msg, ev.occurredAt.mid(11, 5),
@@ -340,7 +353,6 @@ void CurrentPage::rebuildDbZones()
         if (!zones.isEmpty() && zones[0].durationSecs < 0)
             m_prevZoneCard = lastZoneCard;
     } else {
-        // Single client or no games: append zones oldest → newest.
         for (int i = zones.size() - 1; i >= 0; --i) {
             const auto &z = zones[i];
             appendDbZone(makeZoneCard(z.areaName, z.areaLevel,
@@ -352,45 +364,46 @@ void CurrentPage::rebuildDbZones()
 
     setLoadMoreVisible(zones.size() == kDbZoneLimit);
 
-    // Set pending scroll target, then re-enable paints. onScrollRangeChanged
-    // will apply this on each rangeChanged until the layout settles (100ms timer).
-    //
-    //   distFromBottom == -1  → initial load, no prior content → go to bottom
-    //   distFromBottom ≤ 4   → was at bottom → follow bottom
-    //   distFromBottom > 4   → was scrolled up → restore relative position
     m_pendingScrollTo = (distFromBottom <= 4) ? 0 : distFromBottom;
     m_scroll->setUpdatesEnabled(true);
 }
 
 void CurrentPage::onLoadMore()
 {
-    if (!m_db) return;
+    if (!m_queryService || m_loadMoreInFlight) return;
 
-    const int prevMax   = m_scroll->verticalScrollBar()->maximum();
-    const int prevValue = m_scroll->verticalScrollBar()->value();
+    const int prevMax    = m_scroll->verticalScrollBar()->maximum();
+    const int prevValue  = m_scroll->verticalScrollBar()->value();
+    const int fetchOffset = m_dbZoneOffset;
 
-    const auto zones = m_db->fetchZoneTransitions(kDbZoneLimit, m_dbZoneOffset);
-    m_dbZoneOffset += zones.size();
+    m_loadMoreInFlight = true;
+    m_loadMoreBtn->setEnabled(false);
 
-    // Insert older zones right after the load-more button, iterating forward
-    // (newest of batch first). Each insert pushes previous ones down, so the
-    // oldest ends up closest to the button = correct chronological order.
-    const int btnIdx    = m_contentLayout->indexOf(m_loadMoreBtn);
-    const int basePos   = m_sessionStartCard ? 2 : 1;
-    const int insertPos = btnIdx >= 0 ? btnIdx + 1 : basePos;
-    for (const auto &z : zones) {
-        const QString ts = z.enteredAt.mid(11, 5);
-        auto *card = makeZoneCard(z.areaName, z.areaLevel, ts, z.durationSecs);
-        m_contentLayout->insertWidget(insertPos, card);
-        m_dbZoneWidgets.append(card);
-    }
+    m_queryService->fetchZoneTransitions(kDbZoneLimit, fetchOffset,
+        [this, prevMax, prevValue](QList<Database::ZoneTransitionRecord> zones) {
+            m_loadMoreInFlight = false;
+            m_dbZoneOffset += zones.size();
 
-    setLoadMoreVisible(zones.size() == kDbZoneLimit);
+            // Insert older zones right after the load-more button.
+            const int btnIdx    = m_contentLayout->indexOf(m_loadMoreBtn);
+            const int basePos   = m_sessionStartCard ? 2 : 1;
+            const int insertPos = btnIdx >= 0 ? btnIdx + 1 : basePos;
+            for (const auto &z : zones) {
+                const QString ts = z.enteredAt.mid(11, 5);
+                auto *card = makeZoneCard(z.areaName, z.areaLevel, ts, z.durationSecs);
+                m_contentLayout->insertWidget(insertPos, card);
+                m_dbZoneWidgets.append(card);
+            }
 
-    QTimer::singleShot(0, this, [this, prevMax, prevValue]() {
-        const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
-        m_scroll->verticalScrollBar()->setValue(prevValue + delta);
-    });
+            setLoadMoreVisible(zones.size() == kDbZoneLimit);
+            if (zones.size() == kDbZoneLimit)
+                m_loadMoreBtn->setEnabled(true);
+
+            QTimer::singleShot(0, this, [this, prevMax, prevValue]() {
+                const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
+                m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+            });
+        });
 }
 
 // ---------------------------------------------------------------------------

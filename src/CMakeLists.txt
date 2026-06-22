@@ -15,6 +15,8 @@ qt_add_executable(l2p-poe1
     ChatPage.h
     CloseOrphanSessionsWorker.cpp
     CloseOrphanSessionsWorker.h
+    QueryService.cpp
+    QueryService.h
     CurrentPage.cpp
     CurrentPage.h
     Database.cpp

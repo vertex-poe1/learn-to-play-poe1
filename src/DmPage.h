@@ -7,6 +7,7 @@
 #include <QWidget>
 
 class LiveEvent;
+class QueryService;
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -19,9 +20,9 @@ class DmPage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit DmPage(Database *db, QWidget *parent = nullptr);
+    explicit DmPage(QWidget *parent = nullptr);
 
-    void setDatabase(Database *db);
+    void setQueryService(QueryService *qs);
     void setShowGuildTags(bool show);
     void reload();
 
@@ -37,24 +38,28 @@ private slots:
 
 private:
     void rebuild();
+    void applyWhispers(const QList<Database::WhisperRecord> &whispers);
     void openFilterPanel();
     void refreshFilterPanel();
     void filterLeafSelected(const QString &name);
     void scrollToBottom();
     void updateScrollDownBtn();
 
-    Database    *m_db{};
-    QLabel      *m_conversationLabel{};
-    QPushButton *m_filterBtn{};
-    QString      m_filterPlayer;
-    QScrollArea *m_scroll{};
-    QWidget     *m_content{};
-    QVBoxLayout *m_contentLayout{};
-    QTimer      *m_liveRebuildTimer{};
-    bool         m_liveRebuildScrollToBottom{false};
-    bool         m_dirty{true};
-    bool         m_showGuildTags{true};
-    int          m_limit{100};
+    QueryService *m_queryService{};
+    QLabel       *m_conversationLabel{};
+    QPushButton  *m_filterBtn{};
+    QString       m_filterPlayer;
+    QScrollArea  *m_scroll{};
+    QWidget      *m_content{};
+    QVBoxLayout  *m_contentLayout{};
+    QTimer       *m_liveRebuildTimer{};
+    bool          m_liveRebuildScrollToBottom{false};
+    bool          m_dirty{true};
+    bool          m_rebuildInFlight{false};
+    bool          m_showGuildTags{true};
+    int           m_limit{100};
+    int           m_scrollRestorePrevMax{-1};
+    int           m_scrollRestorePrevValue{0};
 
     ScrollJumpButton              *m_scrollDownBtn{};
     QStackedWidget                *m_view{};

@@ -35,18 +35,23 @@ static void setUserVersion(sqlite3 *db, int version)
     execSql(db, sql);
 }
 
-Database::Database(const QString &path)
+Database::Database(const QString &path, bool readOnly)
     : m_path(path)
+    , m_readOnly(readOnly)
 {
     const QByteArray utf8 = path.toUtf8();
-    if (sqlite3_open(utf8.constData(), &m_db) != SQLITE_OK) {
+    const int flags = readOnly
+        ? SQLITE_OPEN_READONLY
+        : (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
+    if (sqlite3_open_v2(utf8.constData(), &m_db, flags, nullptr) != SQLITE_OK) {
         m_lastError = QString::fromUtf8(sqlite3_errmsg(m_db));
         sqlite3_close(m_db);
         m_db = nullptr;
         return;
     }
     applyPragmas();
-    initSchema();
+    if (!readOnly)
+        initSchema();
 }
 
 Database::~Database()
@@ -57,18 +62,24 @@ Database::~Database()
 
 void Database::applyPragmas()
 {
-    execSql(m_db, "PRAGMA journal_mode=WAL;");
+    // Read-only connections inherit WAL mode from the main connection and cannot
+    // change journal mode. Skip write-specific pragmas entirely.
+    if (!m_readOnly) {
+        execSql(m_db, "PRAGMA journal_mode=WAL;");
+        // No busy_timeout: the main thread must never block waiting for a SQLite
+        // lock — SQLITE_BUSY should fail immediately so the UI stays responsive.
+        // The ingest worker sets its own busy_timeout separately.
+    }
     execSql(m_db, "PRAGMA synchronous=NORMAL;");
     execSql(m_db, "PRAGMA temp_store=MEMORY;");
     execSql(m_db, "PRAGMA cache_size=-65536;");
-    // No busy_timeout here: the main thread must never block waiting for
-    // a SQLite lock — SQLITE_BUSY should fail immediately so the UI stays
-    // responsive.  The ingest worker sets its own busy_timeout separately.
 
-    // Per-query budget: interrupt any query that exceeds kQueryBudgetMs on the
-    // UI thread.  The handler is a no-op until armQueryBudget() is called, so
-    // DDL and schema init during construction are unaffected.
-    sqlite3_progress_handler(m_db, 1000, &Database::s_queryProgressHandler, this);
+    if (!m_readOnly) {
+        // Per-query budget: interrupt any query that exceeds kQueryBudgetMs on
+        // the UI thread. The handler is a no-op until armQueryBudget() is called
+        // so DDL and schema init during construction are unaffected.
+        sqlite3_progress_handler(m_db, 1000, &Database::s_queryProgressHandler, this);
+    }
 }
 
 void Database::armQueryBudget() const

@@ -1,6 +1,6 @@
 #include "DmPage.h"
-#include "ScopedBudget.h"
 #include "Database.h"
+#include "QueryService.h"
 #include "ScrollJumpButton.h"
 #include "Theme.h"
 #include "LiveEvent.h"
@@ -8,8 +8,6 @@
 
 #include <functional>
 #include <QDate>
-#include <QDebug>
-#include <QElapsedTimer>
 #include <QEnterEvent>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -341,9 +339,8 @@ private:
 
 // ---- DmPage ----------------------------------------------------------------
 
-DmPage::DmPage(Database *db, QWidget *parent)
+DmPage::DmPage(QWidget *parent)
     : QWidget(parent)
-    , m_db(db)
 {
     // ---- Header row: conversation label + filter button --------------------
     m_conversationLabel = new QLabel("All Combined", this);
@@ -457,9 +454,7 @@ DmPage::DmPage(Database *db, QWidget *parent)
     m_liveRebuildTimer->setInterval(300);
     connect(m_liveRebuildTimer, &QTimer::timeout, this, [this] {
         if (!isVisible()) { m_dirty = true; return; }
-        rebuild();
-        if (m_liveRebuildScrollToBottom)
-            QTimer::singleShot(0, this, &DmPage::scrollToBottom);
+        rebuild(); // scroll-to-bottom handled in applyWhispers via m_liveRebuildScrollToBottom
     });
 
     connect(LiveEventBus::instance(), &LiveEventBus::eventFired,
@@ -477,16 +472,16 @@ DmPage::DmPage(Database *db, QWidget *parent)
             this, [this](int) { updateScrollDownBtn(); });
 }
 
-void DmPage::setDatabase(Database *db)
+void DmPage::setQueryService(QueryService *qs)
 {
-    m_db = db;
+    m_queryService = qs;
 }
 
 void DmPage::setShowGuildTags(bool show)
 {
     if (m_showGuildTags == show) return;
     m_showGuildTags = show;
-    if (isVisible() && m_db) rebuild();
+    if (isVisible() && m_queryService) rebuild();
     else m_dirty = true;
 }
 
@@ -501,7 +496,7 @@ void DmPage::reload()
 void DmPage::showEvent(QShowEvent *e)
 {
     QWidget::showEvent(e);
-    if (m_dirty && m_db)
+    if (m_dirty && m_queryService)
         reload();
 }
 
@@ -536,12 +531,15 @@ void DmPage::onPlayerSelected(const QString &name)
 
 void DmPage::openFilterPanel()
 {
-    if (!m_db) return;
-    m_cachedPartners = m_db->fetchWhisperPartnersWithDates();
-    m_filterPath.clear();
-    refreshFilterPanel();
-    m_filterScroll->verticalScrollBar()->setValue(0);
-    m_view->setCurrentIndex(1);
+    if (!m_queryService) return;
+    m_queryService->fetchWhisperPartnersWithDates(
+        [this](QList<Database::PartnerRecord> partners) {
+            m_cachedPartners = std::move(partners);
+            m_filterPath.clear();
+            refreshFilterPanel();
+            m_filterScroll->verticalScrollBar()->setValue(0);
+            m_view->setCurrentIndex(1);
+        });
 }
 
 void DmPage::refreshFilterPanel()
@@ -681,35 +679,38 @@ void DmPage::filterLeafSelected(const QString &name)
 
 void DmPage::rebuild()
 {
-    ScopedBudget budget("DmPage::rebuild");
-    if (!m_db) return;
+    if (!m_queryService) return;
+    if (m_rebuildInFlight) { m_dirty = true; return; }
+    m_dirty           = false;
+    m_rebuildInFlight = true;
 
-    QElapsedTimer t; t.start();
+    m_queryService->fetchWhispers(m_filterPlayer, m_limit,
+        [this](QList<Database::WhisperRecord> whispers) {
+            m_rebuildInFlight = false;
+            applyWhispers(whispers);
+            if (m_dirty) rebuild();
+        });
+}
 
+void DmPage::applyWhispers(const QList<Database::WhisperRecord> &whispers)
+{
     const bool showNames = m_filterPlayer.isEmpty();
-
-    const QList<Database::WhisperRecord> whispers = m_db->fetchWhispers(m_filterPlayer, m_limit);
-    qDebug() << "[DmPage] fetchWhispers returned" << whispers.size() << "rows in" << t.elapsed() << "ms";
 
     auto *content       = new QWidget;
     auto *contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(Theme::spacingSm, Theme::spacingSm, Theme::spacingSm, Theme::spacingSm);
+    contentLayout->setContentsMargins(Theme::spacingSm, Theme::spacingSm,
+                                      Theme::spacingSm, Theme::spacingSm);
     contentLayout->setSpacing(2);
     contentLayout->addStretch(1);
 
     if (whispers.size() == m_limit) {
-        auto *btn = new QPushButton(
-            QStringLiteral("Load previous 50 messages"), content);
+        auto *btn = new QPushButton(QStringLiteral("Load previous 50 messages"), content);
         btn->setFlat(true);
         connect(btn, &QPushButton::clicked, this, [this] {
-            const int prevMax   = m_scroll->verticalScrollBar()->maximum();
-            const int prevValue = m_scroll->verticalScrollBar()->value();
+            m_scrollRestorePrevMax   = m_scroll->verticalScrollBar()->maximum();
+            m_scrollRestorePrevValue = m_scroll->verticalScrollBar()->value();
             m_limit += 50;
             rebuild();
-            QTimer::singleShot(0, this, [this, prevMax, prevValue] {
-                const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
-                m_scroll->verticalScrollBar()->setValue(prevValue + delta);
-            });
         });
         contentLayout->addWidget(btn);
     }
@@ -727,12 +728,23 @@ void DmPage::rebuild()
                               time, showNames, m_showGuildTags, content));
     }
 
-    qDebug() << "[DmPage] widgets built in" << t.elapsed() << "ms";
     delete m_content;
     m_content       = content;
     m_contentLayout = contentLayout;
     m_scroll->setWidget(m_content);
-    qDebug() << "[DmPage] rebuild done in" << t.elapsed() << "ms";
+
+    if (m_scrollRestorePrevMax >= 0) {
+        const int prevMax   = m_scrollRestorePrevMax;
+        const int prevValue = m_scrollRestorePrevValue;
+        m_scrollRestorePrevMax = -1;
+        QTimer::singleShot(0, this, [this, prevMax, prevValue] {
+            const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
+            m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+        });
+    } else if (m_liveRebuildScrollToBottom) {
+        m_liveRebuildScrollToBottom = false;
+        QTimer::singleShot(0, this, &DmPage::scrollToBottom);
+    }
 }
 
 void DmPage::resizeEvent(QResizeEvent *e)

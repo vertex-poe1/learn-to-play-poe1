@@ -6,6 +6,7 @@
 #include <QWidget>
 
 class LiveEvent;
+class QueryService;
 class QScrollArea;
 class QVBoxLayout;
 class ScrollJumpButton;
@@ -14,8 +15,8 @@ class PastPage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit PastPage(Database *db, QWidget *parent = nullptr);
-    void setDatabase(Database *db);
+    explicit PastPage(QWidget *parent = nullptr);
+    void setQueryService(QueryService *qs);
     void markDirty();
 
 protected:
@@ -27,15 +28,19 @@ private slots:
 
 private:
     void rebuild();
+    void applySessionEvents(const QList<Database::SessionEventRecord> &events);
     void scrollToBottom();
     void updateScrollDownBtn();
 
-    Database    *m_db{};
-    QScrollArea *m_scroll{};
-    QWidget     *m_content{};
-    QVBoxLayout *m_contentLayout{};
-    bool         m_dirty{true};
-    int          m_limit{100};
+    QueryService *m_queryService{};
+    QScrollArea  *m_scroll{};
+    QWidget      *m_content{};
+    QVBoxLayout  *m_contentLayout{};
+    bool          m_dirty{true};
+    bool          m_rebuildInFlight{false};
+    int           m_limit{100};
+    int           m_scrollRestorePrevMax{-1};
+    int           m_scrollRestorePrevValue{0};
 
     ScrollJumpButton *m_scrollDownBtn{};
 };

@@ -10,7 +10,7 @@
 class Database
 {
 public:
-    explicit Database(const QString &path);
+    explicit Database(const QString &path, bool readOnly = false);
     ~Database();
 
     bool    isOpen()    const { return m_db != nullptr; }
@@ -146,5 +146,6 @@ private:
     sqlite3           *m_db{nullptr};
     QString            m_path;
     QString            m_lastError;
+    bool               m_readOnly{false};
     mutable QElapsedTimer m_queryTimer; // invalid until first armQueryBudget() call
 };

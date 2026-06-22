@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NotificationWidget.h"
+#include "QueryService.h"
 #include "WindowTracker.h"
 
 #include <QList>
@@ -8,8 +9,8 @@
 #include <QResizeEvent>
 #include <QWidget>
 
-class Database;
 class LiveEvent;
+class QueryService;
 class QPushButton;
 class QScrollArea;
 class QVBoxLayout;
@@ -21,7 +22,8 @@ class CurrentPage : public QWidget
 public:
     explicit CurrentPage(QWidget *parent = nullptr);
 
-    void setDatabase(Database *db);
+    void setQueryService(QueryService *qs);
+    void markDirty();
     void setRunningGames(const QList<WindowState> &games);
 
     void addNotification(const QString &message, const NotificationStyle &style = {});
@@ -40,6 +42,10 @@ private slots:
 
 private:
     void rebuildDbZones();
+    void applyCurrentPageData(const QueryService::CurrentPageData &data,
+                              const QList<WindowState> &runningGames,
+                              const QMap<quint32, QString> &detectedAt,
+                              int distFromBottom);
     NotificationWidget *makeZoneCard(const QString &areaName, int areaLevel,
                                      const QString &timestamp, int durationSecs);
     void appendDbZone(NotificationWidget *card);
@@ -52,7 +58,7 @@ private:
     QScrollArea    *m_scroll{};
     QWidget        *m_content{};
     QVBoxLayout    *m_contentLayout{};
-    Database       *m_db{};
+    QueryService   *m_queryService{};
 
     QPushButton              *m_loadMoreBtn{};
     QList<NotificationWidget *> m_dbZoneWidgets;
@@ -64,6 +70,8 @@ private:
     QMap<quint32, QString> m_detectedAt;  // pid → HH:mm when first detected
 
     bool                      m_dirty{false};
+    bool                      m_rebuildInFlight{false};
+    bool                      m_loadMoreInFlight{false};
     // -1 = none; 0 = go to bottom; >0 = go to (max - value) to restore position
     int                       m_pendingScrollTo{-1};
     QTimer                   *m_scrollSettleTimer{};

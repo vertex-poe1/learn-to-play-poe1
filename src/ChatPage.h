@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class LiveEvent;
+class QueryService;
 class QCheckBox;
 class QLabel;
 class QPushButton;
@@ -21,9 +22,9 @@ class ChatPage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit ChatPage(Database *db, QWidget *parent = nullptr);
+    explicit ChatPage(QWidget *parent = nullptr);
 
-    void setDatabase(Database *db);
+    void setQueryService(QueryService *qs);
     void setShowGuildTags(bool show);
     void reload();
 
@@ -36,6 +37,7 @@ protected:
 
 private:
     void rebuild();
+    void applyChats(const QList<Database::ChatRecord> &records);
     void openFilterPanel();
     void refreshFilterPanel();
     void scrollToBottom();
@@ -43,15 +45,18 @@ private:
     QSet<QChar> activeChannels() const;
     void updateFilterLabel();
 
-    Database    *m_db{};
-    QScrollArea *m_scroll{};
-    QWidget     *m_content{};
-    QVBoxLayout *m_contentLayout{};
-    QTimer      *m_liveRebuildTimer{};
-    bool         m_liveRebuildScrollToBottom{false};
-    bool         m_dirty{true};
-    bool         m_showGuildTags{true};
-    int          m_limit{100};
+    QueryService *m_queryService{};
+    QScrollArea  *m_scroll{};
+    QWidget      *m_content{};
+    QVBoxLayout  *m_contentLayout{};
+    QTimer       *m_liveRebuildTimer{};
+    bool          m_liveRebuildScrollToBottom{false};
+    bool          m_dirty{true};
+    bool          m_rebuildInFlight{false};
+    bool          m_showGuildTags{true};
+    int           m_limit{100};
+    int           m_scrollRestorePrevMax{-1};
+    int           m_scrollRestorePrevValue{0};
 
     QString m_fromDate;
     QString m_toDate;

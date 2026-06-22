@@ -21,6 +21,7 @@ class PastPage;
 class QTimer;
 class Database;
 class GameOverlay;
+class QueryService;
 class LiveEventRuleEngine;
 class LogIngestWorker;
 class SettingsPage;
@@ -66,8 +67,9 @@ private:
     void setStatusContent(const QString &content);
     void refreshStatusBar();
 
-    AppConfig  m_config;
-    Database  *m_db{};
+    AppConfig     m_config;
+    Database     *m_db{};
+    QueryService *m_queryService{};
 
     CurrentPage        *m_currentPage{};
     TaskManager        *m_taskManager{};
