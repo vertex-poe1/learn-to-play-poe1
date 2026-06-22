@@ -22,16 +22,14 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.7.*"
-          arch: win64_msvc2019_64
+          arch: win64_mingw
           cache: true
 
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      - name: Add MinGW to PATH
+        run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
