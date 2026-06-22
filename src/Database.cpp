@@ -64,6 +64,30 @@ void Database::applyPragmas()
     // No busy_timeout here: the main thread must never block waiting for
     // a SQLite lock — SQLITE_BUSY should fail immediately so the UI stays
     // responsive.  The ingest worker sets its own busy_timeout separately.
+
+    // Per-query budget: interrupt any query that exceeds kQueryBudgetMs on the
+    // UI thread.  The handler is a no-op until armQueryBudget() is called, so
+    // DDL and schema init during construction are unaffected.
+    sqlite3_progress_handler(m_db, 1000, &Database::s_queryProgressHandler, this);
+}
+
+void Database::armQueryBudget() const
+{
+    m_queryTimer.start();
+}
+
+int Database::s_queryProgressHandler(void *ctx)
+{
+    const auto *db = static_cast<const Database *>(ctx);
+    if (!db->m_queryTimer.isValid())
+        return 0;
+    const qint64 ms = db->m_queryTimer.elapsed();
+    if (ms > kQueryBudgetMs) {
+        qWarning("[db] query exceeded budget — %lld ms (limit %lld ms), interrupting",
+                 static_cast<long long>(ms), static_cast<long long>(kQueryBudgetMs));
+        return 1;
+    }
+    return 0;
 }
 
 // Keep docs/schema.md in sync with any changes made here.
@@ -485,6 +509,7 @@ void Database::initSchema()
 QList<Database::WhisperRecord> Database::fetchWhispers(const QString &playerFilter, int limit) const
 {
     if (!m_db) return {};
+    armQueryBudget();
 
     sqlite3_stmt *stmt = nullptr;
     QByteArray nameBytes;
@@ -545,6 +570,7 @@ QList<Database::WhisperRecord> Database::fetchWhispers(const QString &playerFilt
 QStringList Database::fetchWhisperPartners() const
 {
     if (!m_db) return {};
+    armQueryBudget();
 
     sqlite3_stmt *stmt = nullptr;
     sqlite3_prepare_v2(m_db,
@@ -562,6 +588,7 @@ QStringList Database::fetchWhisperPartners() const
 QList<Database::PartnerRecord> Database::fetchWhisperPartnersWithDates() const
 {
     if (!m_db) return {};
+    armQueryBudget();
 
     // Pass 1: partners in most-recently-active order.
     sqlite3_stmt *stmt = nullptr;
@@ -621,6 +648,7 @@ QList<Database::ChatRecord> Database::fetchChats(
 {
     if (!m_db) return {};
     if (channels.isEmpty() && !includeDms) return {};
+    armQueryBudget();
 
     const bool useLimit  = limit > 0;
     const bool hasRange  = !fromDate.isEmpty();
@@ -690,6 +718,7 @@ QStringList Database::fetchChatDates(const QSet<QChar> &channels, bool includeDm
 {
     if (!m_db) return {};
     if (channels.isEmpty() && !includeDms) return {};
+    armQueryBudget();
 
     QString sql;
     if (!channels.isEmpty() && includeDms) {
@@ -802,6 +831,7 @@ QList<Database::SessionRecord> Database::fetchSessions() const
 {
     QList<SessionRecord> result;
     if (!m_db) return result;
+    armQueryBudget();
 
     static const char *sql = R"(
         SELECT s.id, s.started_at, s.ended_at, s.total_secs, s.active_secs,
@@ -844,6 +874,7 @@ QList<Database::SessionEventRecord> Database::fetchSessionEvents(int limit) cons
 {
     QList<SessionEventRecord> result;
     if (!m_db) return result;
+    armQueryBudget();
 
     // Two separate indexed queries instead of a single UNION ALL: the UNION ALL
     // forces SQLite to materialise the entire sessions table twice and sort it,
@@ -930,6 +961,7 @@ QList<Database::SessionEventRecord> Database::fetchSessionEvents(int limit) cons
 int Database::closeOrphanSessions(const QStringList &runningInstallPaths)
 {
     if (!m_db) return 0;
+    armQueryBudget();
 
     // Collect sessions that have no ended_at, along with their install path.
     struct Dangling { qint64 id; QString installPath; };
@@ -990,6 +1022,7 @@ QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, 
 {
     QList<ZoneTransitionRecord> result;
     if (!m_db) return result;
+    armQueryBudget();
 
     static const char *sql = R"(
         SELECT COALESCE(a.display_name, a.code), a.level, ats.entered_at, ats.duration_secs

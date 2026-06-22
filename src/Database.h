@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QList>
 #include <QSet>
 #include <QString>
@@ -134,7 +135,16 @@ private:
     void initSchema();
     void migrate(int fromVersion);
 
-    sqlite3 *m_db{nullptr};
-    QString  m_path;
-    QString  m_lastError;
+    // Arms the per-query budget timer. Call at the start of every fetch method
+    // that runs on the UI thread. The progress handler interrupts any query whose
+    // total elapsed time exceeds kQueryBudgetMs, returning SQLITE_INTERRUPT so
+    // the call returns early with partial/empty results instead of blocking.
+    void armQueryBudget() const;
+    static int s_queryProgressHandler(void *ctx);
+    static constexpr qint64 kQueryBudgetMs = 30;
+
+    sqlite3           *m_db{nullptr};
+    QString            m_path;
+    QString            m_lastError;
+    mutable QElapsedTimer m_queryTimer; // invalid until first armQueryBudget() call
 };
