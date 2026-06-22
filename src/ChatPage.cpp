@@ -1,4 +1,5 @@
 #include "ChatPage.h"
+#include "ScopedBudget.h"
 #include "Database.h"
 #include "ScrollJumpButton.h"
 #include "Theme.h"
@@ -561,6 +562,7 @@ void ChatPage::updateFilterLabel()
 
 void ChatPage::rebuild()
 {
+    ScopedBudget budget("ChatPage::rebuild");
     if (!m_db) return;
 
     QElapsedTimer t; t.start();

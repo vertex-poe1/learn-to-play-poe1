@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ScopedBudget.h"
 #include "ChatPage.h"
 #include "CurrentPage.h"
 #include "Database.h"
@@ -222,6 +223,7 @@ void MainWindow::onConfigChanged()
 
 void MainWindow::onPollTimer()
 {
+    ScopedBudget budget("MainWindow::onPollTimer", 100);
     QElapsedTimer pollTimer;
     pollTimer.start();
 
@@ -318,9 +320,6 @@ void MainWindow::onPollTimer()
         }
     }
 
-    const qint64 tickMs = pollTimer.elapsed();
-    if (tickMs > 500)
-        qDebug() << "[poll] SLOW tick elapsed_ms=" << tickMs;
 }
 
 void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason)

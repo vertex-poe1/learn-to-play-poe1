@@ -1,4 +1,5 @@
 #include "PastPage.h"
+#include "ScopedBudget.h"
 #include "Database.h"
 #include "LiveEvent.h"
 #include "LiveEventBus.h"
@@ -129,6 +130,7 @@ void PastPage::onLiveEvent(const LiveEvent &event)
 
 void PastPage::rebuild()
 {
+    ScopedBudget budget("PastPage::rebuild");
     if (!m_db) return;
     m_dirty = false;
 

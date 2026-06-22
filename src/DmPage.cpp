@@ -1,4 +1,5 @@
 #include "DmPage.h"
+#include "ScopedBudget.h"
 #include "Database.h"
 #include "ScrollJumpButton.h"
 #include "Theme.h"
@@ -680,6 +681,7 @@ void DmPage::filterLeafSelected(const QString &name)
 
 void DmPage::rebuild()
 {
+    ScopedBudget budget("DmPage::rebuild");
     if (!m_db) return;
 
     QElapsedTimer t; t.start();

@@ -1,4 +1,5 @@
 #include "CurrentPage.h"
+#include "ScopedBudget.h"
 #include "Database.h"
 #include "LiveEvent.h"
 #include "LiveEventBus.h"
@@ -191,6 +192,7 @@ void CurrentPage::onLiveEvent(const LiveEvent &event)
 
 void CurrentPage::rebuildDbZones()
 {
+    ScopedBudget budget("CurrentPage::rebuildDbZones");
     if (!m_db) return;
     m_dirty = false;
 
