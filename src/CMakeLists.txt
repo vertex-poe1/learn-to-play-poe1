@@ -61,6 +61,14 @@ qt_add_executable(l2p-poe1
     WindowTracker.h
 )
 
+qt_add_resources(l2p-poe1 "dbdata"
+    PREFIX "/db"
+    BASE "${CMAKE_SOURCE_DIR}/data"
+    FILES
+        "${CMAKE_SOURCE_DIR}/data/schema.sql"
+        "${CMAKE_SOURCE_DIR}/data/seed.sql"
+)
+
 qt_add_resources(l2p-poe1 "resources"
     PREFIX "/icons"
     BASE "${CMAKE_SOURCE_DIR}/assets/logo"
