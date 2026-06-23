@@ -159,15 +159,21 @@ protected:
     void paintEvent(QPaintEvent *) override
     {
         const qreal dpr = devicePixelRatioF();
-        QPixmap pix(qRound(width() * dpr), qRound(height() * dpr));
+        const int pw = qRound(width()  * dpr);
+        const int ph = qRound(height() * dpr);
+        // lr is the pixmap's extent in logical coordinates (Qt 5.15+ paints to QPixmap
+        // in logical coords; without an explicit rect render() uses pix.width() as a
+        // logical value, which overflows the physical buffer at fractional DPR).
+        const QRectF lr(0, 0, qreal(pw) / dpr, qreal(ph) / dpr);
+        QPixmap pix(pw, ph);
         pix.setDevicePixelRatio(dpr);
         pix.fill(Qt::transparent);
-        { QPainter gp(&pix); QSvgRenderer(QStringLiteral(":/icons/info-circle.svg")).render(&gp); }
+        { QPainter gp(&pix); QSvgRenderer(QStringLiteral(":/icons/info-circle.svg")).render(&gp, lr); }
         { QPainter cp(&pix);
           cp.setCompositionMode(QPainter::CompositionMode_SourceIn);
-          cp.fillRect(pix.rect(), m_color); }
+          cp.fillRect(lr, m_color); }
         QPainter p(this);
-        p.drawPixmap(0, 0, pix);
+        p.drawPixmap(QRect(QPoint(0, 0), size()), pix, QRect(0, 0, pw, ph));
     }
 
 private:

@@ -87,19 +87,21 @@ void NavBar::paintEvent(QPaintEvent *)
     const int iconY    = (cellH - iconSize) / 2;
 
     const qreal dpr = devicePixelRatioF();
-    QPixmap gearPix(qRound(iconSize * dpr), qRound(iconSize * dpr));
+    const int gw = qRound(iconSize * dpr);
+    const QRectF lr(0, 0, qreal(gw) / dpr, qreal(gw) / dpr);
+    QPixmap gearPix(gw, gw);
     gearPix.setDevicePixelRatio(dpr);
     gearPix.fill(Qt::transparent);
     {
         QPainter gp(&gearPix);
-        QSvgRenderer(QString(m_gearActive ? ":/icons/gear-fill.svg" : ":/icons/gear.svg")).render(&gp);
+        QSvgRenderer(QString(m_gearActive ? ":/icons/gear-fill.svg" : ":/icons/gear.svg")).render(&gp, lr);
     }
     {
         QPainter tp(&gearPix);
         tp.setCompositionMode(QPainter::CompositionMode_SourceIn);
-        tp.fillRect(gearPix.rect(), gearColor);
+        tp.fillRect(lr, gearColor);
     }
-    p.drawPixmap(iconX, iconY, gearPix);
+    p.drawPixmap(QRect(iconX, iconY, iconSize, iconSize), gearPix, QRect(0, 0, gw, gw));
 
     if (m_gearActive) {
         p.fillRect(tabAreaW, h - separatorH - underlineH, k_gearWidth, underlineH,

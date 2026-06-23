@@ -47,15 +47,17 @@ void ScrollJumpButton::paintEvent(QPaintEvent *)
     const int pad = 12;
     const int iconSize = width() - pad * 2;
     const qreal dpr = devicePixelRatioF();
-    QPixmap pix(qRound(iconSize * dpr), qRound(iconSize * dpr));
+    const int pw = qRound(iconSize * dpr);
+    const QRectF lr(0, 0, qreal(pw) / dpr, qreal(pw) / dpr);
+    QPixmap pix(pw, pw);
     pix.setDevicePixelRatio(dpr);
     pix.fill(Qt::transparent);
     const QString iconPath = m_skipMode
         ? QStringLiteral(":/icons/chevron-bar-down.svg")
         : QStringLiteral(":/icons/arrow-down.svg");
-    { QPainter gp(&pix); QSvgRenderer(iconPath).render(&gp); }
+    { QPainter gp(&pix); QSvgRenderer(iconPath).render(&gp, lr); }
     { QPainter cp(&pix);
       cp.setCompositionMode(QPainter::CompositionMode_SourceIn);
-      cp.fillRect(pix.rect(), Theme::textPrimary); }
-    p.drawPixmap(pad, pad, pix);
+      cp.fillRect(lr, Theme::textPrimary); }
+    p.drawPixmap(QRect(pad, pad, iconSize, iconSize), pix, QRect(0, 0, pw, pw));
 }

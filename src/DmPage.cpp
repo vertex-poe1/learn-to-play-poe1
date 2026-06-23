@@ -170,14 +170,16 @@ protected:
             int textX = bx + kPad;
             if (out) {
                 const qreal dpr = devicePixelRatioF();
-                QPixmap pix(qRound(nh * dpr), qRound(nh * dpr));
+                const int pw = qRound(nh * dpr);
+                const QRectF lr(0, 0, qreal(pw) / dpr, qreal(pw) / dpr);
+                QPixmap pix(pw, pw);
                 pix.setDevicePixelRatio(dpr);
                 pix.fill(Qt::transparent);
-                { QPainter gp(&pix); QSvgRenderer(QStringLiteral(":/icons/chevron-bar-right.svg")).render(&gp); }
+                { QPainter gp(&pix); QSvgRenderer(QStringLiteral(":/icons/chevron-bar-right.svg")).render(&gp, lr); }
                 { QPainter cp(&pix);
                   cp.setCompositionMode(QPainter::CompositionMode_SourceIn);
-                  cp.fillRect(pix.rect(), fg); }
-                p.drawPixmap(textX, y, pix);
+                  cp.fillRect(lr, fg); }
+                p.drawPixmap(QRect(textX, y, nh, nh), pix, QRect(0, 0, pw, pw));
                 textX += nh + 4;
             }
 
