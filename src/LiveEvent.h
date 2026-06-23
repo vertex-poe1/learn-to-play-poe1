@@ -23,6 +23,8 @@
 //   quest_event:          event_type (sub-type string)
 //   general_event:        event_type (sub-type string)
 //   session_start:        (none)
+//   login_screen:         (none)
+//   char_select:          (none)
 struct LiveEvent {
     QString     type;
     QString     timestamp; // "2026-06-03 14:23:45" from the log
@@ -47,4 +49,6 @@ namespace LiveEventType {
     inline constexpr const char* QuestEvent         = "quest_event";
     inline constexpr const char* GeneralEvent       = "general_event";
     inline constexpr const char* SessionStart       = "session_start";
+    inline constexpr const char* LoginScreen        = "login_screen";
+    inline constexpr const char* CharSelect         = "char_select";
 }

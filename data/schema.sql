@@ -317,6 +317,16 @@ CREATE TABLE IF NOT EXISTS app_state (
     value TEXT NOT NULL
 );
 
+-- Pre-session screen markers: login screen and character select screen.
+-- Stored outside sessions/areas since they occur before any session exists.
+CREATE TABLE IF NOT EXISTS client_screen_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    install_id  INTEGER NOT NULL REFERENCES installs(id),
+    event_type  TEXT    NOT NULL,  -- 'login_screen' or 'char_select'
+    occurred_at TEXT    NOT NULL,
+    UNIQUE(install_id, occurred_at, event_type)
+);
+
 -- Chronological spine for the historical events panel. One row per event regardless
 -- of type; source_id is the rowid in the type-specific table. Indexed on occurred_at
 -- so paginated queries never scan the full union of event tables.

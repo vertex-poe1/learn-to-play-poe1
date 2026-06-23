@@ -57,10 +57,45 @@ private:
 static QString formatDuration(int secs)
 {
     if (secs <= 0) return {};
-    const int h = secs / 3600;
-    const int m = (secs % 3600) / 60;
-    if (h > 0) return QStringLiteral("%1h %2m").arg(h).arg(m);
-    return QStringLiteral("%1m").arg(m);
+    constexpr int kYear  = 365 * 86400;
+    constexpr int kMonth = 30  * 86400;
+    constexpr int kWeek  = 7   * 86400;
+    const int Y = secs / kYear;
+    const int M = (secs % kYear)  / kMonth;
+    const int W = (secs % kMonth) / kWeek;
+    const int D = (secs % kWeek)  / 86400;
+    const int h = (secs % 86400)  / 3600;
+    const int m = (secs % 3600)   / 60;
+    const int s = secs % 60;
+    if (Y > 0)
+        return (Y > 5 || M == 0) ? QStringLiteral("%1Y").arg(Y)
+                                  : QStringLiteral("%1Y%2M").arg(Y).arg(M);
+    if (M > 0)
+        return (M > 5 || W == 0) ? QStringLiteral("%1M").arg(M)
+                                  : QStringLiteral("%1M%2W").arg(M).arg(W);
+    if (W > 0)
+        return (W > 5 || D == 0) ? QStringLiteral("%1W").arg(W)
+                                  : QStringLiteral("%1W%2D").arg(W).arg(D);
+    if (D > 0)
+        return (D > 5 || h == 0) ? QStringLiteral("%1D").arg(D)
+                                  : QStringLiteral("%1D%2h").arg(D).arg(h);
+    if (h > 0)
+        return (h > 5 || m == 0) ? QStringLiteral("%1h").arg(h)
+                                  : QStringLiteral("%1h%2m").arg(h).arg(m);
+    if (m > 0)
+        return (m > 5 || s == 0) ? QStringLiteral("%1m").arg(m)
+                                  : QStringLiteral("%1m%2s").arg(m).arg(s);
+    return QStringLiteral("%1s").arg(s);
+}
+
+static QString formatDuration(double secs)
+{
+    if (secs <= 0.0) return {};
+    const int si = static_cast<int>(secs);
+    const int ms = qRound((secs - si) * 1000);
+    if (si > 5) return QStringLiteral("%1s").arg(si);
+    if (ms > 0) return QStringLiteral("%1.%2s").arg(si).arg(ms, 3, 10, QChar('0'));
+    return QStringLiteral("%1s").arg(si);
 }
 
 // ---- PastPage ---------------------------------------------------------------

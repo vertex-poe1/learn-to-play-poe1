@@ -58,8 +58,6 @@ CATEGORIES = [
 IGNORE_PREFIXES = [
     "Rebuilding UI::",
     'Changing to device "',
-    "Async connecting to ",
-    "Connected to ",
     "Got Instance Details ",
     "Precalc",
     "Connecting to instance server ",
@@ -113,7 +111,10 @@ CATEGORIES_SQL = [
     ("log_file",           ["LOG FILE"]),
     ("area_generating",    ["Generating level"]),
     ("area_entered",       ["You have entered"]),
+    ("scene_login",        ["[SCENE] Set Source [(unknown)]"]),
     ("scene_set_source",   ["[SCENE] Set Source ["]),
+    ("async_connect",      ["Async connecting to "]),
+    ("connected_to",       ["Connected to "]),
     ("guild_joined",           ["Joined guild named"]),
     ("guild_details_changed",  ["Guild details changed "]),
     ("guild_member_updated",   ["Guild member updated "]),
@@ -226,6 +227,11 @@ CATEGORY_NORMALIZERS: dict[str, list[tuple[re.Pattern, str]]] = {
     ],
 }
 
+# Lines to drop from specific category files during dedup — not meaningful data.
+CATEGORY_DROP_PATTERNS: dict[str, list[re.Pattern]] = {
+    "scene_set_source": [re.compile(r'\(null\)'), re.compile(r'\(unknown\)')],
+}
+
 
 def extract_category(name, patterns, src, outdir):
     args = ["findstr"] + [f"/c:{p}" for p in patterns] + [str(src)]
@@ -235,7 +241,7 @@ def extract_category(name, patterns, src, outdir):
     return name, cat_file.stat().st_size
 
 
-def strip_and_dedup(path, normalizers=None):
+def strip_and_dedup(path, normalizers=None, drop_patterns=None):
     """Strip timestamp prefix and remove duplicate lines in-place."""
     if not path.exists() or path.stat().st_size == 0:
         return 0, 0
@@ -249,6 +255,8 @@ def strip_and_dedup(path, normalizers=None):
         if normalizers:
             for pattern, replacement in normalizers:
                 clean = pattern.sub(replacement, clean)
+        if drop_patterns and any(p.search(clean) for p in drop_patterns):
+            continue
         if clean.strip() and clean not in seen:
             seen.add(clean)
             out.append(clean)
@@ -326,14 +334,14 @@ print(f"  dialog:     {t25 - t2:.2f}s  ({dialog_kb} KB)")
 
 # Phase 3: strip timestamp prefix and dedup every output file
 targets = (
-    [(OUT, None)] +
-    [(dialog_out, None)] +
-    [(OUTDIR     / f"{name}.txt", CATEGORY_NORMALIZERS.get(name)) for name, _ in CATEGORIES] +
-    [(OUTDIR_SQL / f"{name}.txt", CATEGORY_NORMALIZERS.get(name)) for name, _ in CATEGORIES_SQL]
+    [(OUT, None, None)] +
+    [(dialog_out, None, None)] +
+    [(OUTDIR     / f"{name}.txt", CATEGORY_NORMALIZERS.get(name), CATEGORY_DROP_PATTERNS.get(name)) for name, _ in CATEGORIES] +
+    [(OUTDIR_SQL / f"{name}.txt", CATEGORY_NORMALIZERS.get(name), CATEGORY_DROP_PATTERNS.get(name)) for name, _ in CATEGORIES_SQL]
 )
 total_in = total_out = 0
-for p, normalizers in targets:
-    n_in, n_out = strip_and_dedup(p, normalizers)
+for p, normalizers, drop_patterns in targets:
+    n_in, n_out = strip_and_dedup(p, normalizers, drop_patterns)
     total_in  += n_in
     total_out += n_out
 

@@ -247,8 +247,9 @@ void LogIngestWorker::start()
     sqlite3_stmt *passQuestUpsertStmt    = nullptr;
     sqlite3_stmt *passQuestSelectStmt    = nullptr;
     sqlite3_stmt *passSnapQuestStmt      = nullptr;
-    sqlite3_stmt *rulesetFailedStmt    = nullptr;
-    sqlite3_stmt *generalEventStmt     = nullptr;
+    sqlite3_stmt *rulesetFailedStmt       = nullptr;
+    sqlite3_stmt *generalEventStmt        = nullptr;
+    sqlite3_stmt *clientScreenEventStmt   = nullptr;
     sqlite3_stmt *sourceStmt           = nullptr;
     sqlite3_stmt *eventInsertStmt      = nullptr;
 
@@ -439,6 +440,9 @@ void LogIngestWorker::start()
     sqlite3_prepare_v2(db,
         "INSERT OR IGNORE INTO general_events(session_id, area_id, event_type, occurred_at) VALUES(?,?,?,?);",
         -1, &generalEventStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO client_screen_events(install_id, event_type, occurred_at) VALUES(?,?,?);",
+        -1, &clientScreenEventStmt, nullptr);
     sqlite3_prepare_v2(db,
         "UPDATE installs SET "
         "file_created_at=?, file_modified_at=?, file_size=?, last_byte_offset=? "
@@ -657,6 +661,8 @@ void LogIngestWorker::start()
     QString currentGuild;
     QString pendingCode;
     int     pendingLevel           = 0;
+    bool    pendingCharSelect      = false;
+    bool    pendingAsyncConnect    = false;
     bool    skipTriggerFollowup    = false;
 
     constexpr int kChunkSize    = 10'000;
@@ -1514,44 +1520,76 @@ void LogIngestWorker::start()
                 }
             }
 
-            // [SCENE] Set Source — fallback area transition when no Generating level preceded it
-            if (pendingCode.isEmpty() && sessionId >= 0) {
+            // [SCENE] Set Source — login screen marker or fallback area transition
+            {
                 const auto sceneM = sceneSourceRe.match(message);
                 if (sceneM.hasMatch()) {
-                    const QByteArray nameBytes = sceneM.captured(1).toUtf8();
-
-                    sqlite3_bind_text(areaInsertIgnoreStmt, 1, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
-                    sqlite3_bind_text(areaInsertIgnoreStmt, 2, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
-                    sqlite3_step(areaInsertIgnoreStmt);
-                    sqlite3_reset(areaInsertIgnoreStmt);
-
-                    sqlite3_bind_text(areaSelectStmt, 1, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
-                    qint64 areaId = -1;
-                    if (sqlite3_step(areaSelectStmt) == SQLITE_ROW)
-                        areaId = sqlite3_column_int64(areaSelectStmt, 0);
-                    sqlite3_reset(areaSelectStmt);
-
-                    if (areaId >= 0) {
-                        sqlite3_bind_int64(moveInsertStmt, 1, m_installId);
-                        sqlite3_bind_int64(moveInsertStmt, 2, areaId);
-                        sqlite3_bind_text (moveInsertStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
-                        sqlite3_step(moveInsertStmt);
-                        sqlite3_reset(moveInsertStmt);
-                        ++totalVisits;
-                        safeCommitPos = lineStartPos;
-                        sessionAreaId = areaId;
-
-                        closeSpan(ts);
-                        openSpan(ts, areaId);
-
+                    const QString sceneName = sceneM.captured(1);
+                    if (sceneName == QLatin1String("(unknown)")) {
+                        // Login screen — record timestamp; next Async connecting is char select
+                        sqlite3_bind_int64(clientScreenEventStmt, 1, m_installId);
+                        sqlite3_bind_text (clientScreenEventStmt, 2, "login_screen", -1, SQLITE_STATIC);
+                        sqlite3_bind_text (clientScreenEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                        sqlite3_step(clientScreenEventStmt);
+                        insertEvent(tsBytes, "client_screen");
+                        sqlite3_reset(clientScreenEventStmt);
+                        pendingCharSelect = true;
                         if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
-                            emit liveEventParsed(LiveEvent{LiveEventType::AreaEntered, ts, {
-                                {"area_name",  sceneM.captured(1)},
-                                {"area_code",  sceneM.captured(1)},
-                                {"area_level", 0}
-                            }});
+                            emit liveEventParsed(LiveEvent{LiveEventType::LoginScreen, ts, {}});
+                    } else if (sceneName != QLatin1String("(null)") && pendingCode.isEmpty() && sessionId >= 0) {
+                        // Fallback area transition when no Generating level preceded it
+                        const QByteArray nameBytes = sceneName.toUtf8();
+
+                        sqlite3_bind_text(areaInsertIgnoreStmt, 1, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
+                        sqlite3_bind_text(areaInsertIgnoreStmt, 2, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
+                        sqlite3_step(areaInsertIgnoreStmt);
+                        sqlite3_reset(areaInsertIgnoreStmt);
+
+                        sqlite3_bind_text(areaSelectStmt, 1, nameBytes.constData(), nameBytes.size(), SQLITE_STATIC);
+                        qint64 areaId = -1;
+                        if (sqlite3_step(areaSelectStmt) == SQLITE_ROW)
+                            areaId = sqlite3_column_int64(areaSelectStmt, 0);
+                        sqlite3_reset(areaSelectStmt);
+
+                        if (areaId >= 0) {
+                            sqlite3_bind_int64(moveInsertStmt, 1, m_installId);
+                            sqlite3_bind_int64(moveInsertStmt, 2, areaId);
+                            sqlite3_bind_text (moveInsertStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                            sqlite3_step(moveInsertStmt);
+                            sqlite3_reset(moveInsertStmt);
+                            ++totalVisits;
+                            safeCommitPos = lineStartPos;
+                            sessionAreaId = areaId;
+
+                            closeSpan(ts);
+                            openSpan(ts, areaId);
+
+                            if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
+                                emit liveEventParsed(LiveEvent{LiveEventType::AreaEntered, ts, {
+                                    {"area_name",  sceneName},
+                                    {"area_code",  sceneName},
+                                    {"area_level", 0}
+                                }});
+                        }
                     }
                 }
+            }
+
+            // Character select screen: Async connecting (while on login screen) then Connected confirms success
+            if (pendingCharSelect && message.contains(QLatin1String("Async connecting to ")))
+                pendingAsyncConnect = true;
+
+            if (pendingAsyncConnect && message.contains(QLatin1String("Connected to "))) {
+                pendingCharSelect   = false;
+                pendingAsyncConnect = false;
+                sqlite3_bind_int64(clientScreenEventStmt, 1, m_installId);
+                sqlite3_bind_text (clientScreenEventStmt, 2, "char_select", -1, SQLITE_STATIC);
+                sqlite3_bind_text (clientScreenEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                sqlite3_step(clientScreenEventStmt);
+                insertEvent(tsBytes, "client_screen");
+                sqlite3_reset(clientScreenEventStmt);
+                if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
+                    emit liveEventParsed(LiveEvent{LiveEventType::CharSelect, ts, {}});
             }
         }
 
@@ -1638,6 +1676,7 @@ void LogIngestWorker::start()
     sqlite3_finalize(passSnapQuestStmt);
     sqlite3_finalize(rulesetFailedStmt);
     sqlite3_finalize(generalEventStmt);
+    sqlite3_finalize(clientScreenEventStmt);
     sqlite3_finalize(sourceStmt);
     sqlite3_finalize(eventInsertStmt);
     sqlite3_close(db);
