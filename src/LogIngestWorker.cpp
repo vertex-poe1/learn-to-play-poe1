@@ -524,7 +524,10 @@ void LogIngestWorker::start()
     // Opens a new area_time_span for the given area (areaId=-1 → char select).
     // Uses INSERT OR IGNORE + SELECT so resume re-processing is safe.
     auto openSpan = [&](const QString &ts, qint64 areaId) {
-        if (sessionId < 0) return;
+        if (sessionId < 0) {
+            qDebug() << "[ingest] openSpan dropped: sessionId=-1 ts=" << ts << "areaId=" << areaId;
+            return;
+        }
 
         const QByteArray tsBytes = ts.toUtf8();
         sqlite3_bind_int64(spanInsertStmt, 1, sessionId);
@@ -661,7 +664,24 @@ void LogIngestWorker::start()
 
     // Client screen state machine — tracks where the player is in the UI flow.
     // Area data (pendingCode/pendingLevel) is separate transient state for zone loading.
-    enum class LocState { Unknown, LoginScreen, AwaitingConnect, CharSelect, InZone };
+    //
+    // Three observed flows:
+    //
+    //   Regular launch:
+    //     LOG FILE OPENING → Unknown
+    //     [SCENE] Set Source [(unknown)]                          → LoginScreen
+    //     Async connecting … / Connected …                       → ConnectingFromLogin → CharSelect
+    //     [SCENE] Set Source [<zone>]  (or You have entered)     → InZone
+    //
+    //   Go back to login screen (from zone):
+    //     [SCENE] Set Source [(null)]
+    //     [SCENE] Set Source [(unknown)]                         → LoginScreen
+    //
+    //   Go back to character select (from zone):
+    //     Async connecting … / Connected …                       → ConnectingFromZone → AwaitingScene
+    //     [SCENE] Set Source [(null)]
+    //     [SCENE] Set Source [(unknown)]                         → CharSelect
+    enum class LocState { Unknown, LoginScreen, ConnectingFromLogin, ConnectingFromZone, AwaitingScene, CharSelect, InZone };
     LocState locState = LocState::Unknown;
 
     QString currentGuild;
@@ -689,6 +709,37 @@ void LogIngestWorker::start()
     };
 
     execSql(db, "BEGIN;");
+
+    // If resuming mid-session (app restarted while game was running), the LOG FILE
+    // OPENING for the current session was already processed in a previous run, so
+    // sessionId stays -1 and openSpan() silently drops every zone transition.
+    // Recover sessionId and currentSpanId from the DB so new zone spans attach
+    // to the correct session and the previous open span gets properly closed.
+    if (m_resumeOffset > 0) {
+        qDebug() << "[ingest] resumeOffset=" << m_resumeOffset << "— attempting mid-session recovery";
+        sqlite3_stmt *recoverStmt = nullptr;
+        sqlite3_prepare_v2(db,
+            "SELECT s.id, ats.id "
+            "FROM sessions s "
+            "LEFT JOIN area_time_spans ats "
+            "  ON ats.session_id = s.id AND ats.exited_at IS NULL "
+            "WHERE s.install_id = ? AND s.ended_at IS NULL "
+            "ORDER BY s.started_at DESC, ats.entered_at DESC "
+            "LIMIT 1;",
+            -1, &recoverStmt, nullptr);
+        sqlite3_bind_int64(recoverStmt, 1, m_installId);
+        if (sqlite3_step(recoverStmt) == SQLITE_ROW) {
+            sessionId    = sqlite3_column_int64(recoverStmt, 0);
+            if (sqlite3_column_type(recoverStmt, 1) != SQLITE_NULL)
+                currentSpanId = sqlite3_column_int64(recoverStmt, 1);
+            locState = LocState::InZone;
+            qDebug() << "[ingest] mid-session recovery: sessionId=" << sessionId
+                     << "currentSpanId=" << currentSpanId;
+        } else {
+            qDebug() << "[ingest] mid-session recovery: no open session for installId=" << m_installId;
+        }
+        sqlite3_finalize(recoverStmt);
+    }
 
     while (!isCancelled()) {
         if (file.atEnd()) {
@@ -1501,7 +1552,9 @@ void LogIngestWorker::start()
             // Area entered (correlated with pending Generating line)
             if (!pendingCode.isEmpty()
                 && locState != LocState::LoginScreen
-                && locState != LocState::AwaitingConnect) {
+                && locState != LocState::ConnectingFromLogin
+                && locState != LocState::ConnectingFromZone
+                && locState != LocState::AwaitingScene) {
                 const auto entM = enteredRe.match(message);
                 if (entM.hasMatch()) {
                     const QByteArray codeBytes = pendingCode.toUtf8();
@@ -1563,19 +1616,29 @@ void LogIngestWorker::start()
                 if (sceneM.hasMatch()) {
                     const QString sceneName = sceneM.captured(1);
                     if (sceneName == QLatin1String("(unknown)")) {
-                        // Login screen — transition to LoginScreen state; abandon any in-flight zone load
+                        const bool toCharSelect = (locState == LocState::AwaitingScene);
+                        const char *screenType  = toCharSelect ? "char_select" : "login_screen";
                         sqlite3_bind_int64(clientScreenEventStmt, 1, m_installId);
-                        sqlite3_bind_text (clientScreenEventStmt, 2, "login_screen", -1, SQLITE_STATIC);
+                        sqlite3_bind_text (clientScreenEventStmt, 2, screenType, -1, SQLITE_STATIC);
                         sqlite3_bind_text (clientScreenEventStmt, 3, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
                         sqlite3_step(clientScreenEventStmt);
                         insertEvent(tsBytes, "client_screen");
                         sqlite3_reset(clientScreenEventStmt);
-                        locState = LocState::LoginScreen;
                         pendingCode.clear();
-                        if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
-                            emit liveEventParsed(LiveEvent{LiveEventType::LoginScreen, ts, {}});
+                        if (toCharSelect) {
+                            locState = LocState::CharSelect;
+                            if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
+                                emit liveEventParsed(LiveEvent{LiveEventType::CharSelect, ts, {}});
+                        } else {
+                            locState = LocState::LoginScreen;
+                            if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
+                                emit liveEventParsed(LiveEvent{LiveEventType::LoginScreen, ts, {}});
+                        }
                     } else if (sceneName != QLatin1String("(null)") && pendingCode.isEmpty() && sessionId >= 0
-                               && locState != LocState::LoginScreen && locState != LocState::AwaitingConnect) {
+                               && locState != LocState::LoginScreen
+                               && locState != LocState::ConnectingFromLogin
+                               && locState != LocState::ConnectingFromZone
+                               && locState != LocState::AwaitingScene) {
                         // Fallback area transition when no Generating level preceded it
                         const QByteArray nameBytes = sceneName.toUtf8();
 
@@ -1617,11 +1680,13 @@ void LogIngestWorker::start()
                 }
             }
 
-            // Character select screen: Async connecting (from LoginScreen) then Connected confirms arrival
+            // Character select screen transitions (see flow diagram above).
             if (locState == LocState::LoginScreen && message.contains(QLatin1String("Async connecting to ")))
-                locState = LocState::AwaitingConnect;
+                locState = LocState::ConnectingFromLogin;
+            else if (locState == LocState::InZone && message.contains(QLatin1String("Async connecting to ")))
+                locState = LocState::ConnectingFromZone;
 
-            if (locState == LocState::AwaitingConnect && message.contains(QLatin1String("Connected to "))) {
+            if (locState == LocState::ConnectingFromLogin && message.contains(QLatin1String("Connected to "))) {
                 locState = LocState::CharSelect;
                 sqlite3_bind_int64(clientScreenEventStmt, 1, m_installId);
                 sqlite3_bind_text (clientScreenEventStmt, 2, "char_select", -1, SQLITE_STATIC);
@@ -1631,7 +1696,8 @@ void LogIngestWorker::start()
                 sqlite3_reset(clientScreenEventStmt);
                 if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
                     emit liveEventParsed(LiveEvent{LiveEventType::CharSelect, ts, {}});
-            }
+            } else if (locState == LocState::ConnectingFromZone && message.contains(QLatin1String("Connected to ")))
+                locState = LocState::AwaitingScene;
         }
 
         if (++chunkCount >= kChunkSize) {
@@ -1654,7 +1720,12 @@ void LogIngestWorker::start()
     }
 
     flushPassives();
-    closeSession(lastTs);
+    // Only close the session in live mode (game ended or app closed while game was running).
+    // In batch mode, the session belongs to the game's lifetime, not the app's — leave it
+    // open so fetchZoneTransitions can find it.  closeOrphanSessions handles closure for
+    // installs where the game is no longer running.
+    if (m_liveMode.load(std::memory_order_relaxed))
+        closeSession(lastTs);
     flushSource(file.pos());
     {
         const qint64 commitStart = wallClock.elapsed();

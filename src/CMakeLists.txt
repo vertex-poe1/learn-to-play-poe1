@@ -115,6 +115,9 @@ qt_add_resources(l2p-poe1 "svgicons"
         "${CMAKE_SOURCE_DIR}/assets/icons/geo-fill.svg"
         "${CMAKE_SOURCE_DIR}/assets/icons/door-open-fill.svg"
         "${CMAKE_SOURCE_DIR}/assets/icons/safe2-fill.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/indent.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/box-arrow-in-right.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/person-fill.svg"
 )
 
 qt_add_resources(l2p-poe1 "brandsvg"

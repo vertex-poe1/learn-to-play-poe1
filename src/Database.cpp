@@ -652,6 +652,24 @@ QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, 
     if (!m_db) return result;
     armQueryBudget();
 
+    // Log the session this query will bind to.
+    {
+        sqlite3_stmt *dbgStmt = nullptr;
+        if (sqlite3_prepare_v2(m_db,
+                "SELECT id, started_at, ended_at FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1;",
+                -1, &dbgStmt, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(dbgStmt) == SQLITE_ROW) {
+                const qint64 sid = sqlite3_column_int64(dbgStmt, 0);
+                const char  *sta = reinterpret_cast<const char *>(sqlite3_column_text(dbgStmt, 1));
+                qDebug() << "[db] fetchZoneTransitions: open session id=" << sid
+                         << "started_at=" << (sta ? sta : "(null)");
+            } else {
+                qDebug() << "[db] fetchZoneTransitions: no open session found";
+            }
+            sqlite3_finalize(dbgStmt);
+        }
+    }
+
     static const char *sql = R"(
         SELECT COALESCE(a.display_name, a.code), a.code, a.type, a.subtype, a.level, ats.entered_at, ats.duration_secs
         FROM area_time_spans ats
@@ -688,5 +706,7 @@ QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, 
         result.append(r);
     }
     sqlite3_finalize(stmt);
+    qDebug() << "[db] fetchZoneTransitions: returned" << result.size() << "rows"
+             << "(limit=" << limit << "offset=" << offset << ")";
     return result;
 }

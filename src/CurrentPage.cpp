@@ -153,6 +153,8 @@ void CurrentPage::setQueryService(QueryService *qs)
 void CurrentPage::markDirty()
 {
   m_dirty = true;
+  if (isVisible() && m_queryService)
+    rebuildDbZones();
 }
 
 void CurrentPage::setRunningGames(const QList<WindowState> &games)
@@ -268,6 +270,7 @@ void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
   {
     const QString ts = QDateTime::currentDateTime().toString("HH:mm");
     auto *card = new NotificationWidget("Login screen", {}, {}, ts, clientScreenStyle(), m_content);
+    card->setLeadingIcon(QStringLiteral(":/icons/box-arrow-in-right.svg"), QColor(160, 130, 95), 20);
     appendLiveWidget(card);
     m_prevZoneCard = nullptr; // player left a zone; don't stamp it on the next area entry
   }
@@ -275,6 +278,7 @@ void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
   {
     const QString ts = QDateTime::currentDateTime().toString("HH:mm");
     auto *card = new NotificationWidget("Character select", {}, {}, ts, clientScreenStyle(), m_content);
+    card->setLeadingIcon(QStringLiteral(":/icons/person-fill.svg"), QColor(160, 130, 95), 20);
     appendLiveWidget(card);
   }
   else if (event.type == LiveEventType::SessionStart)
@@ -288,6 +292,7 @@ void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
   {
     const QString ts = QDateTime::currentDateTime().toString("HH:mm");
     auto *card = new NotificationWidget("Alt-Tab", {}, {}, ts, altTabStyle(), m_content);
+    card->setLeadingIcon(QStringLiteral(":/icons/indent.svg"), QColor(110, 110, 130), 20);
     appendLiveWidget(card);
     m_prevAltTabCard = card;
   }
