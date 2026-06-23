@@ -485,7 +485,10 @@ NotificationWidget *CurrentPage::makeZoneCard(const QString &areaName, const QSt
                                                int areaLevel, const QString &timestamp,
                                                int durationSecs)
 {
-    const QString tag = areaLevel > 0 ? QStringLiteral("lv %1").arg(areaLevel) : QString{};
+    const bool showTag = areaLevel > 0
+                         && areaType != QLatin1String("Hideout")
+                         && areaType != QLatin1String("Mechanic");
+    const QString tag = showTag ? QStringLiteral("lv %1").arg(areaLevel) : QString{};
     if (!areaType.isEmpty()) {
         auto *card = new NotificationWidget(areaType + ":", {}, {}, timestamp, zoneStyle(), m_content);
         card->setAreaName(areaName);

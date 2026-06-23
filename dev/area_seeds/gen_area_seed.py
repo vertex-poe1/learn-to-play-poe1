@@ -1,3 +1,5 @@
+# dev/area_seeds/gen_area_seed.py (python)
+
 """
 Assign area types in the database, then dump one seed file per type.
 
@@ -80,13 +82,13 @@ def apply_type_rules(db: sqlite3.Connection) -> None:
 
     # Campaign acts 1–5: main areas 1_N_*, vaal areas 1_SideAreaN_*
     for n in range(1, 6):
-        _glob(db, f"Campaign — Act {n}",                  f"1_{n}_*")
-        _glob(db, f"Campaign — Act {n} — Vaal side area", f"1_SideArea{n}_*")
+        _glob(db, f"Act {n}",                  f"1_{n}_*")
+        _glob(db, f"Act {n} — Vaal side area", f"1_SideArea{n}_*")
 
     # Campaign acts 6–10: main areas 2_N_*, vaal areas 1_SideAreaN_*
     for n in range(6, 11):
-        _glob(db, f"Campaign — Act {n}",                  f"2_{n}_*")
-        _glob(db, f"Campaign — Act {n} — Vaal side area", f"1_SideArea{n}_*")
+        _glob(db, f"Act {n}",                  f"2_{n}_*")
+        _glob(db, f"Act {n} — Vaal side area", f"1_SideArea{n}_*")
 
     db.commit()
     print(f"Type rules applied ({db.total_changes - before} rows updated).")

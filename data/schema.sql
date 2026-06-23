@@ -1,3 +1,5 @@
+-- data/schema.sql (sql)
+
 CREATE TABLE IF NOT EXISTS installs (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     path             TEXT    NOT NULL UNIQUE,
@@ -12,15 +14,15 @@ CREATE TABLE IF NOT EXISTS areas (
     code         TEXT    NOT NULL UNIQUE,
     type         TEXT    CHECK(type IN (
                      'Campaign',
-                     'Campaign — Act 1',  'Campaign — Act 2',  'Campaign — Act 3',
-                     'Campaign — Act 4',  'Campaign — Act 5',  'Campaign — Act 6',
-                     'Campaign — Act 7',  'Campaign — Act 8',  'Campaign — Act 9',
-                     'Campaign — Act 10',
-                     'Campaign — Act 1 — Vaal side area',   'Campaign — Act 2 — Vaal side area',
-                     'Campaign — Act 3 — Vaal side area',   'Campaign — Act 4 — Vaal side area',
-                     'Campaign — Act 5 — Vaal side area',   'Campaign — Act 6 — Vaal side area',
-                     'Campaign — Act 7 — Vaal side area',   'Campaign — Act 8 — Vaal side area',
-                     'Campaign — Act 9 — Vaal side area',   'Campaign — Act 10 — Vaal side area',
+                     'Act 1',  'Act 2',  'Act 3',
+                     'Act 4',  'Act 5',  'Act 6',
+                     'Act 7',  'Act 8',  'Act 9',
+                     'Act 10',
+                     'Act 1 — Vaal side area',   'Act 2 — Vaal side area',
+                     'Act 3 — Vaal side area',   'Act 4 — Vaal side area',
+                     'Act 5 — Vaal side area',   'Act 6 — Vaal side area',
+                     'Act 7 — Vaal side area',   'Act 8 — Vaal side area',
+                     'Act 9 — Vaal side area',   'Act 10 — Vaal side area',
                      'Map', 'Map — Vaal side area',
                      'Hideout', 'Mechanic', 'Heist', 'Lab', 'Boss Arena', 'PvP'
                  )),

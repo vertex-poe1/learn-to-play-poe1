@@ -1,3 +1,5 @@
+// src/Database.h (C++)
+
 #pragma once
 
 #include <QElapsedTimer>
@@ -13,11 +15,12 @@ public:
     explicit Database(const QString &path, bool readOnly = false);
     ~Database();
 
-    bool    isOpen()    const { return m_db != nullptr; }
+    bool isOpen() const { return m_db != nullptr; }
     QString lastError() const { return m_lastError; }
-    QString path()      const { return m_path; }
+    QString path() const { return m_path; }
 
-    struct InstallState {
+    struct InstallState
+    {
         qint64 id{-1};
         qint64 fileCreatedAt{0};
         qint64 fileModifiedAt{0};
@@ -25,44 +28,49 @@ public:
         qint64 lastByteOffset{0};
     };
 
-    struct NpcDialogEntry {
+    struct NpcDialogEntry
+    {
         QString messageHash;
         QString npcName;
         QString npcNameHash;
-        QString label;        // may be empty; preserved on conflict
+        QString label; // may be empty; preserved on conflict
     };
 
-    struct WhisperRecord {
-        QString direction;   // "from" or "to"
+    struct WhisperRecord
+    {
+        QString direction; // "from" or "to"
         QString playerName;
-        QString guildTag;    // may be empty
+        QString guildTag; // may be empty
         QString message;
-        QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
+        QString occurredAt; // "YYYY-MM-DD HH:MM:SS"
     };
 
-    struct PartnerRecord {
-        QString     name;
+    struct PartnerRecord
+    {
+        QString name;
         QStringList dates; // distinct "YYYY-MM-DD" values, most-recent first
     };
 
-    struct ChatRecord {
-        QString source;      // "chat" or "dm"
-        QString channel;     // "#", "$", "%", "&", "@from", "@to"
+    struct ChatRecord
+    {
+        QString source;  // "chat" or "dm"
+        QString channel; // "#", "$", "%", "&", "@from", "@to"
         QString playerName;
-        QString guildTag;    // may be empty
+        QString guildTag; // may be empty
         QString message;
-        QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
+        QString occurredAt; // "YYYY-MM-DD HH:MM:SS"
     };
 
-    struct SessionRecord {
-        qint64  id{-1};
-        QString startedAt;    // "YYYY-MM-DD HH:MM:SS"
-        QString endedAt;      // may be empty if session is still open
-        int     totalSecs{-1};
-        int     activeSecs{-1};
-        QString accountName;  // may be empty
-        QString charName;     // may be empty
-        QString charClass;    // may be empty
+    struct SessionRecord
+    {
+        qint64 id{-1};
+        QString startedAt; // "YYYY-MM-DD HH:MM:SS"
+        QString endedAt;   // may be empty if session is still open
+        int totalSecs{-1};
+        int activeSecs{-1};
+        QString accountName; // may be empty
+        QString charName;    // may be empty
+        QString charClass;   // may be empty
     };
 
     // Inserts the install path if new; returns current state either way.
@@ -92,7 +100,7 @@ public:
     QList<ChatRecord> fetchChats(const QSet<QChar> &channels, bool includeDms,
                                  int limit = 100,
                                  const QString &fromDate = {},
-                                 const QString &toDate   = {},
+                                 const QString &toDate = {},
                                  int offset = 0) const;
 
     // Returns distinct dates ("YYYY-MM-DD") that have data for the given filter,
@@ -102,14 +110,15 @@ public:
     // Returns all sessions ordered by started_at ASC, with joined account/char info.
     QList<SessionRecord> fetchSessions() const;
 
-    struct SessionEventRecord {
+    struct SessionEventRecord
+    {
         QString eventType;   // "start" or "stop"
         QString occurredAt;  // "YYYY-MM-DD HH:MM:SS"
         QString charName;    // may be empty
         QString charClass;   // may be empty
         QString installPath; // installs.path — which Client.txt this came from
-        int     activeSecs{-1};
-        int     totalSecs{-1};
+        int activeSecs{-1};
+        int totalSecs{-1};
     };
 
     // Returns game-start and game-stop events as a flat chronological list.
@@ -120,12 +129,13 @@ public:
     // Uses datetime('now','localtime') as the end timestamp; returns count closed.
     int closeOrphanSessions(const QStringList &runningInstallPaths);
 
-    struct ZoneTransitionRecord {
-        QString areaName;         // display_name, or code if display_name is absent
-        QString areaType;         // areas.type (e.g. "Map", "Campaign — Act 1"), or empty
-        int     areaLevel{0};
-        QString enteredAt;        // "YYYY-MM-DD HH:MM:SS"
-        int     durationSecs{-1}; // -1 when the span is still open (current zone)
+    struct ZoneTransitionRecord
+    {
+        QString areaName; // display_name, or code if display_name is absent
+        QString areaType; // areas.type (e.g. "Map", "Act 1"), or empty
+        int areaLevel{0};
+        QString enteredAt;    // "YYYY-MM-DD HH:MM:SS"
+        int durationSecs{-1}; // -1 when the span is still open (current zone)
     };
 
     // Returns zone transitions for the most recent session, newest first.
@@ -145,9 +155,9 @@ private:
     static int s_queryProgressHandler(void *ctx);
     static constexpr qint64 kQueryBudgetMs = 30;
 
-    sqlite3           *m_db{nullptr};
-    QString            m_path;
-    QString            m_lastError;
-    bool               m_readOnly{false};
+    sqlite3 *m_db{nullptr};
+    QString m_path;
+    QString m_lastError;
+    bool m_readOnly{false};
     mutable QElapsedTimer m_queryTimer; // invalid until first armQueryBudget() call
 };

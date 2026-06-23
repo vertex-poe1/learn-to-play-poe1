@@ -1,3 +1,5 @@
+-- data/areas/map_vaal_side_area.sql (sql)
+
 INSERT OR IGNORE INTO areas (code, type, display_name) VALUES
     ('MapSideArea4_4', 'Map — Vaal side area', 'Abandoned Dam'),
     ('MapSideArea4_2', 'Map — Vaal side area', 'Ancient Catacomb'),
