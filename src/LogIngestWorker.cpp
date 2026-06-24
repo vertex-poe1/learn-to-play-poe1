@@ -213,6 +213,8 @@ void LogIngestWorker::start()
     sqlite3_stmt *sessionSelectStmt   = nullptr;
     sqlite3_stmt *sessionCloseStmt    = nullptr;
     sqlite3_stmt *afkStmt             = nullptr;
+    sqlite3_stmt *altTabInsertStmt    = nullptr;
+    sqlite3_stmt *altTabCloseStmt     = nullptr;
     sqlite3_stmt *spanInsertStmt      = nullptr;
     sqlite3_stmt *spanSelectStmt      = nullptr;
     sqlite3_stmt *spanCloseStmt       = nullptr;
@@ -318,6 +320,12 @@ void LogIngestWorker::start()
         "INSERT INTO session_afk(session_id, afk_on_at, afk_off_at) VALUES(?,?,?) "
         "ON CONFLICT(session_id, afk_on_at) DO UPDATE SET afk_off_at=excluded.afk_off_at;",
         -1, &afkStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "INSERT OR IGNORE INTO session_alt_tabs(session_id, out_at) VALUES(?,?);",
+        -1, &altTabInsertStmt, nullptr);
+    sqlite3_prepare_v2(db,
+        "UPDATE session_alt_tabs SET in_at=? WHERE session_id=? AND out_at=?;",
+        -1, &altTabCloseStmt, nullptr);
     // area_id and char_id may be NULL (char select / unknown character).
     sqlite3_prepare_v2(db,
         "INSERT OR IGNORE INTO area_time_spans(session_id, area_id, char_id, entered_at) VALUES(?,?,?,?);",
@@ -552,11 +560,22 @@ void LogIngestWorker::start()
         currentSpanAfkSecs = 0;
     };
 
-    // Closes the current session, capping any open AFK / span first.
+    // Closes the current session, capping any open alt-tab / AFK / span first.
     auto closeSession = [&](const QString &endTs) {
         if (sessionId < 0 || endTs.isEmpty()) return;
 
         closeSpan(endTs);
+
+        if (!altTabOutTs.isEmpty()) {
+            const QByteArray endBytes = endTs.toUtf8();
+            const QByteArray outBytes = altTabOutTs.toUtf8();
+            sqlite3_bind_text (altTabCloseStmt, 1, endBytes.constData(), endBytes.size(), SQLITE_STATIC);
+            sqlite3_bind_int64(altTabCloseStmt, 2, sessionId);
+            sqlite3_bind_text (altTabCloseStmt, 3, outBytes.constData(), outBytes.size(), SQLITE_STATIC);
+            sqlite3_step(altTabCloseStmt);
+            sqlite3_reset(altTabCloseStmt);
+            altTabOutTs.clear();
+        }
 
         if (!afkOnTs.isEmpty()) {
             sessionAfkSecs += qMax(0LL, tsToSecs(endTs) - tsToSecs(afkOnTs));
@@ -697,11 +716,20 @@ void LogIngestWorker::start()
     int           chunkCommits  = 0;
     const qint64  ingestStart   = m_resumeOffset > 0 ? m_resumeOffset : 0;
 
-    // Emits AltTabBack with elapsed duration if the player is currently alt-tabbed.
+    // Writes the in_at timestamp to the open alt-tab DB row and emits AltTabBack.
     // Called on explicit [WINDOW] Gained focus and on player-action events (zone
     // transition, own whisper) that imply the player is back.
     auto clearAltTab = [&](const QString &gainedTs) {
         if (altTabOutTs.isEmpty()) return;
+        if (sessionId >= 0) {
+            const QByteArray gainedBytes = gainedTs.toUtf8();
+            const QByteArray outBytes    = altTabOutTs.toUtf8();
+            sqlite3_bind_text (altTabCloseStmt, 1, gainedBytes.constData(), gainedBytes.size(), SQLITE_STATIC);
+            sqlite3_bind_int64(altTabCloseStmt, 2, sessionId);
+            sqlite3_bind_text (altTabCloseStmt, 3, outBytes.constData(), outBytes.size(), SQLITE_STATIC);
+            sqlite3_step(altTabCloseStmt);
+            sqlite3_reset(altTabCloseStmt);
+        }
         const qint64 dur = qMax(0LL, tsToSecs(gainedTs) - tsToSecs(altTabOutTs));
         altTabOutTs.clear();
         if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
@@ -789,7 +817,6 @@ void LogIngestWorker::start()
                 lastTs = ts;
 
                 flushPassives();
-                altTabOutTs.clear(); // don't carry alt-tab state across sessions
                 closeSession(prevTs);
 
                 sqlite3_bind_int64(sessionInsertStmt, 1, m_installId);
@@ -893,9 +920,17 @@ void LogIngestWorker::start()
             // Window focus ([WINDOW] bracket tag)
             if (hdr.captured(3) == QLatin1String("WINDOW")) {
                 if (message == QLatin1String("Lost focus")) {
-                    altTabOutTs = ts;
-                    if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
-                        emit liveEventParsed(LiveEvent{LiveEventType::AltTabOut, ts, {}});
+                    if (altTabOutTs.isEmpty()) {
+                        altTabOutTs = ts;
+                        if (sessionId >= 0) {
+                            sqlite3_bind_int64(altTabInsertStmt, 1, sessionId);
+                            sqlite3_bind_text (altTabInsertStmt, 2, tsBytes.constData(), tsBytes.size(), SQLITE_STATIC);
+                            sqlite3_step(altTabInsertStmt);
+                            sqlite3_reset(altTabInsertStmt);
+                        }
+                        if (caughtUp && m_liveMode.load(std::memory_order_relaxed))
+                            emit liveEventParsed(LiveEvent{LiveEventType::AltTabOut, ts, {}});
+                    }
                 } else if (message == QLatin1String("Gained focus")) {
                     clearAltTab(ts);
                 }
@@ -1749,6 +1784,8 @@ void LogIngestWorker::start()
     sqlite3_finalize(sessionSelectStmt);
     sqlite3_finalize(sessionCloseStmt);
     sqlite3_finalize(afkStmt);
+    sqlite3_finalize(altTabInsertStmt);
+    sqlite3_finalize(altTabCloseStmt);
     sqlite3_finalize(spanInsertStmt);
     sqlite3_finalize(spanSelectStmt);
     sqlite3_finalize(spanCloseStmt);

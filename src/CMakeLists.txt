@@ -154,7 +154,7 @@ add_dependencies(l2p-poe1 validate_doc_urls)
 
 if (WIN32)
     target_sources(l2p-poe1 PRIVATE WindowTrackerWindows.cpp OverlayKeepalive.cpp OverlayKeepalive.h l2p-poe1.rc)
-    target_link_libraries(l2p-poe1 PRIVATE psapi)
+    target_link_libraries(l2p-poe1 PRIVATE psapi dbghelp)
     if (MSVC)
         # Disable the auto-generated manifest; we embed our own via the RC file.
         target_link_options(l2p-poe1 PRIVATE "/MANIFEST:NO")

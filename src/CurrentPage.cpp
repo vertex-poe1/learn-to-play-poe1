@@ -10,7 +10,9 @@
 #include "Theme.h"
 
 #include <QDateTime>
+#include <QDebug>
 #include <QFrame>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -230,7 +232,6 @@ void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
   if (bulk)
   {
     m_prevZoneCard = nullptr;
-    m_prevAltTabCard = nullptr;
     m_dirty = true;
     if (isVisible() && m_queryService)
       rebuildDbZones();
@@ -250,13 +251,11 @@ void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
     // recent transitions are [new zone, previous zone].
     if (m_prevZoneCard && m_queryService)
     {
-      NotificationWidget *prevCard = m_prevZoneCard;
+      QPointer<NotificationWidget> prevCard = m_prevZoneCard;
       m_queryService->fetchZoneTransitions(2, 0,
-                                           [this, prevCard](QList<Database::ZoneTransitionRecord> zones)
+                                           [prevCard](QList<Database::ZoneTransitionRecord> zones)
                                            {
-                                             // m_prevZoneCard may have changed by the time this fires; use
-                                             // the captured pointer (still valid — still in m_dbZoneWidgets or
-                                             // m_liveEventWidgets) to stamp it directly.
+                                             if (!prevCard) return; // widget deleted by a rebuild before callback fired
                                              if (zones.size() >= 2 && zones[1].durationSecs > 0)
                                              {
                                                const QString dur = "\xc2\xb7 " + formatDuration(zones[1].durationSecs);
@@ -290,46 +289,26 @@ void CurrentPage::onLiveEvent(const LiveEvent &event, bool bulk)
   }
   else if (event.type == LiveEventType::SessionStart)
   {
-    m_prevAltTabCard = nullptr;
-    m_altTabs.clear();
     m_dirty = true;
     if (isVisible() && m_queryService)
       rebuildDbZones();
   }
   else if (event.type == LiveEventType::AltTabOut)
   {
-    const QString ts = QDateTime::currentDateTime().toString("HH:mm");
-    if (m_altTabs.size() >= 20)
-      m_altTabs.removeFirst();
-    m_altTabs.append({ts, -1});
-    auto *card = new NotificationWidget("Alt-Tab", {}, {}, ts, altTabStyle(), m_content);
+    // If a DB rebuild already shows this exact pending record, skip the live
+    // card — it would appear on top of the DB card as a duplicate.
+    if (event.timestamp == m_dbAltTabOutTs)
+      return;
+    auto *card = new NotificationWidget("Alt-Tab", {}, {},
+        event.timestamp.mid(11, 5), altTabStyle(), m_content);
     card->setLeadingIcon(QStringLiteral(":/icons/indent.svg"), QColor(110, 110, 130), 20);
     appendLiveWidget(card);
-    m_prevAltTabCard = card;
   }
   else if (event.type == LiveEventType::AltTabBack)
   {
-    const int dur = event.data.value("duration_secs").toInt();
-    if (!m_altTabs.isEmpty())
-      m_altTabs.last().second = dur;
-    if (m_prevAltTabCard)
-    {
-      // Stamp the card that's already on screen.
-      if (dur > 0)
-        m_prevAltTabCard->setHeaderSuffix("\xc2\xb7 " + formatDuration(dur));
-      m_prevAltTabCard = nullptr;
-    }
-    else if (!m_rebuildInFlight && !m_altTabs.isEmpty())
-    {
-      // Card was wiped by a completed rebuild; show it immediately.
-      const auto &rec = m_altTabs.last();
-      auto *card = new NotificationWidget("Alt-Tab", {}, {}, rec.first, altTabStyle(), m_content);
-      card->setLeadingIcon(QStringLiteral(":/icons/indent.svg"), QColor(110, 110, 130), 20);
-      if (dur > 0)
-        card->setHeaderSuffix("\xc2\xb7 " + formatDuration(dur));
-      appendLiveWidget(card);
-    }
-    // If m_rebuildInFlight: applyCurrentPageData will recreate with the updated duration.
+    // Don't rebuild immediately — the natural setRunningGames cycle will pick up
+    // the completed record with its duration from the DB within a second or two.
+    m_dirty = true;
   }
 }
 
@@ -357,36 +336,6 @@ void CurrentPage::rebuildDbZones()
   const QList<WindowState> runningGames = m_runningGames;
   const QMap<quint32, QString> detectedAt = m_detectedAt;
 
-  // Clear live and zone widgets now (before the fetch) so the user never sees
-  // a stale zone list. Suppress repaints until we rebuild.
-  m_scroll->setUpdatesEnabled(false);
-
-  for (QWidget *w : m_liveEventWidgets)
-  {
-    m_contentLayout->removeWidget(w);
-    delete w;
-  }
-  m_liveEventWidgets.clear();
-
-  if (m_sessionStartCard)
-  {
-    m_contentLayout->removeWidget(m_sessionStartCard);
-    delete m_sessionStartCard;
-    m_sessionStartCard = nullptr;
-  }
-
-  for (NotificationWidget *w : m_dbZoneWidgets)
-  {
-    m_contentLayout->removeWidget(w);
-    delete w;
-  }
-  m_dbZoneWidgets.clear();
-  m_prevZoneCard = nullptr;
-  m_prevAltTabCard = nullptr;
-  m_dbZoneOffset = 0;
-
-  setLoadMoreVisible(false);
-
   // Determine how many session events we need:
   //   single client: 10 (search for matching start event by folder+time)
   //   multi-client:  50 (interleaved with zones)
@@ -413,6 +362,36 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
 {
   const auto &sessionEvents = data.sessionEvents;
   const auto &zones = data.zones;
+
+  // Clear existing widgets right before replacing them. Old content remains
+  // visible during the async DB fetch so WM_PAINT never sees a blank area.
+  m_scroll->setUpdatesEnabled(false);
+
+  for (QWidget *w : m_liveEventWidgets)
+  {
+    m_contentLayout->removeWidget(w);
+    delete w;
+  }
+  m_liveEventWidgets.clear();
+
+  if (m_sessionStartCard)
+  {
+    m_contentLayout->removeWidget(m_sessionStartCard);
+    delete m_sessionStartCard;
+    m_sessionStartCard = nullptr;
+  }
+
+  for (NotificationWidget *w : m_dbZoneWidgets)
+  {
+    m_contentLayout->removeWidget(w);
+    delete w;
+  }
+  m_dbZoneWidgets.clear();
+  m_prevZoneCard = nullptr;
+  m_dbZoneOffset = 0;
+  m_dbAltTabOutTs.clear();
+
+  setLoadMoreVisible(false);
 
   // --- Session-running card(s) at the top ---
   if (!runningGames.isEmpty())
@@ -531,21 +510,25 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
         sessionStarts.append(ev);
     }
 
-    const auto &afkMc = data.afkRecords; // newest-first
+    const auto &afkMc = data.afkRecords;   // newest-first
+    const auto &atMc  = data.altTabRecords; // newest-first
     NotificationWidget *lastZoneCard = nullptr;
-    int zi = zones.size() - 1;
-    int si = 0;
-    int ai = afkMc.size() - 1;
+    int zi   = zones.size() - 1;
+    int si   = 0;
+    int ai   = afkMc.size() - 1;
+    int ati  = atMc.size() - 1;
 
-    while (zi >= 0 || si < sessionStarts.size() || ai >= 0)
+    while (zi >= 0 || si < (int)sessionStarts.size() || ai >= 0 || ati >= 0)
     {
-      const QString zTs = (zi >= 0) ? zones[zi].enteredAt        : QString{};
-      const QString sTs = (si < sessionStarts.size()) ? sessionStarts[si].occurredAt : QString{};
-      const QString aTs = (ai >= 0) ? afkMc[ai].afkOnAt          : QString{};
+      const QString zTs  = (zi  >= 0) ? zones[zi].enteredAt                              : QString{};
+      const QString sTs  = (si  < (int)sessionStarts.size()) ? sessionStarts[si].occurredAt : QString{};
+      const QString aTs  = (ai  >= 0) ? afkMc[ai].afkOnAt                                : QString{};
+      const QString atTs = (ati >= 0) ? atMc[ati].outAt                                  : QString{};
 
-      // Zones before session-starts before AFK when tied.
-      const bool takeZone    = !zTs.isEmpty() && (sTs.isEmpty() || zTs <= sTs) && (aTs.isEmpty() || zTs <= aTs);
-      const bool takeSession = !takeZone && !sTs.isEmpty() && (aTs.isEmpty() || sTs <= aTs);
+      // Zones before session-starts before AFK before alt-tab when tied.
+      const bool takeZone    = !zTs.isEmpty()  && (sTs.isEmpty()  || zTs <= sTs)  && (aTs.isEmpty()  || zTs <= aTs)  && (atTs.isEmpty() || zTs <= atTs);
+      const bool takeSession = !takeZone   && !sTs.isEmpty()  && (aTs.isEmpty()  || sTs <= aTs)  && (atTs.isEmpty() || sTs <= atTs);
+      const bool takeAfkMc   = !takeZone   && !takeSession && !aTs.isEmpty()  && (atTs.isEmpty() || aTs <= atTs);
 
       if (takeZone)
       {
@@ -582,7 +565,7 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
         m_dbZoneWidgets.append(card);
         ++si;
       }
-      else
+      else if (takeAfkMc)
       {
         const auto &a = afkMc[ai];
         auto *card = new NotificationWidget("AFK", {}, {}, a.afkOnAt.mid(11, 5), afkStyle(), m_content);
@@ -593,6 +576,21 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
         m_dbZoneWidgets.append(card);
         --ai;
       }
+      else
+      {
+        const auto &r = atMc[ati];
+        auto *card = new NotificationWidget("Alt-Tab", {}, {}, r.outAt.mid(11, 5), altTabStyle(), m_content);
+        card->setLeadingIcon(QStringLiteral(":/icons/indent.svg"), QColor(110, 110, 130), 20);
+        if (r.durationSecs > 0)
+          card->setHeaderSuffix("\xc2\xb7 " + formatDuration(r.durationSecs));
+        else {
+          m_dbAltTabOutTs = r.outAt;
+          qDebug() << "[CurrentPage] pending alt-tab card (no duration), out_at=" << r.outAt;
+        }
+        m_contentLayout->addWidget(card);
+        m_dbZoneWidgets.append(card);
+        --ati;
+      }
     }
 
     if (!zones.isEmpty() && zones[0].durationSecs < 0)
@@ -602,20 +600,24 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
   {
     const auto &cse = data.clientScreenEvents; // newest-first
     const auto &afk = data.afkRecords;          // newest-first
+    const auto &at  = data.altTabRecords;        // newest-first
     NotificationWidget *lastZoneCard = nullptr;
-    int zi = zones.size() - 1;                  // walk oldest→newest
-    int ci = cse.size() - 1;
-    int ai = afk.size() - 1;
+    int zi  = zones.size() - 1;                  // walk oldest→newest
+    int ci  = cse.size() - 1;
+    int ai  = afk.size() - 1;
+    int ati = at.size() - 1;
 
-    while (zi >= 0 || ci >= 0 || ai >= 0)
+    while (zi >= 0 || ci >= 0 || ai >= 0 || ati >= 0)
     {
-      const QString zTs = (zi >= 0) ? zones[zi].enteredAt  : QString{};
-      const QString cTs = (ci >= 0) ? cse[ci].occurredAt   : QString{};
-      const QString aTs = (ai >= 0) ? afk[ai].afkOnAt      : QString{};
+      const QString zTs  = (zi  >= 0) ? zones[zi].enteredAt   : QString{};
+      const QString cTs  = (ci  >= 0) ? cse[ci].occurredAt    : QString{};
+      const QString aTs  = (ai  >= 0) ? afk[ai].afkOnAt       : QString{};
+      const QString atTs = (ati >= 0) ? at[ati].outAt          : QString{};
 
-      // Pick the oldest event; tie-break: zones before screen events before AFK.
-      const bool takeZone   = !zTs.isEmpty() && (cTs.isEmpty() || zTs <= cTs) && (aTs.isEmpty() || zTs <= aTs);
-      const bool takeScreen = !takeZone && !cTs.isEmpty() && (aTs.isEmpty() || cTs <= aTs);
+      // Pick the oldest event; tie-break: zones > screen > AFK > alt-tab.
+      const bool takeZone   = !zTs.isEmpty()   && (cTs.isEmpty()  || zTs <= cTs)  && (aTs.isEmpty()  || zTs <= aTs)  && (atTs.isEmpty() || zTs <= atTs);
+      const bool takeScreen = !takeZone   && !cTs.isEmpty()  && (aTs.isEmpty()  || cTs <= aTs)  && (atTs.isEmpty() || cTs <= atTs);
+      const bool takeAfk    = !takeZone   && !takeScreen && !aTs.isEmpty()  && (atTs.isEmpty() || aTs <= atTs);
 
       if (takeZone)
       {
@@ -644,7 +646,7 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
         appendDbZone(card);
         --ci;
       }
-      else
+      else if (takeAfk)
       {
         const auto &a = afk[ai];
         auto *card = new NotificationWidget("AFK", {}, {}, a.afkOnAt.mid(11, 5), afkStyle(), m_content);
@@ -654,31 +656,24 @@ void CurrentPage::applyCurrentPageData(const QueryService::CurrentPageData &data
         appendDbZone(card);
         --ai;
       }
+      else
+      {
+        const auto &r = at[ati];
+        auto *card = new NotificationWidget("Alt-Tab", {}, {}, r.outAt.mid(11, 5), altTabStyle(), m_content);
+        card->setLeadingIcon(QStringLiteral(":/icons/indent.svg"), QColor(110, 110, 130), 20);
+        if (r.durationSecs > 0)
+          card->setHeaderSuffix("\xc2\xb7 " + formatDuration(r.durationSecs));
+        else {
+          m_dbAltTabOutTs = r.outAt;
+          qDebug() << "[CurrentPage] pending alt-tab card (no duration), out_at=" << r.outAt;
+        }
+        appendDbZone(card);
+        --ati;
+      }
     }
 
     if (!zones.isEmpty() && zones[0].durationSecs < 0)
       m_prevZoneCard = lastZoneCard;
-  }
-
-  setLoadMoreVisible(zones.size() == kDbZoneLimit);
-
-  // Rebuild all alt-tab cards from the in-memory record list.
-  // The active card (last entry, duration == -1) is skipped if AltTabOut already
-  // created it during the async gap — identified by m_prevAltTabCard being set.
-  for (int i = 0; i < m_altTabs.size(); ++i)
-  {
-    const auto &rec = m_altTabs[i];
-    const bool isActive = (i == m_altTabs.size() - 1) && (rec.second < 0);
-    if (isActive && m_prevAltTabCard)
-      continue;
-    auto *card = new NotificationWidget("Alt-Tab", {}, {}, rec.first, altTabStyle(), m_content);
-    card->setLeadingIcon(QStringLiteral(":/icons/indent.svg"), QColor(110, 110, 130), 20);
-    if (rec.second > 0)
-      card->setHeaderSuffix("\xc2\xb7 " + formatDuration(rec.second));
-    m_contentLayout->addWidget(card);
-    m_liveEventWidgets.append(card);
-    if (isActive)
-      m_prevAltTabCard = card;
   }
 
   m_pendingScrollTo = (distFromBottom <= 4) ? 0 : distFromBottom;

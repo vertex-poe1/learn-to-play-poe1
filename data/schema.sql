@@ -105,6 +105,14 @@ CREATE TABLE IF NOT EXISTS session_afk (
     UNIQUE(session_id, afk_on_at)
 );
 
+CREATE TABLE IF NOT EXISTS session_alt_tabs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES sessions(id),
+    out_at     TEXT    NOT NULL,
+    in_at      TEXT,
+    UNIQUE(session_id, out_at)
+);
+
 -- One row per contiguous period spent in a single area (area_id NULL = character select).
 -- char_id is the most recently seen character at the time the span opened, updated on
 -- level-up while the span is open. Duration is computed in SQL on close so we never

@@ -18,6 +18,7 @@ public:
         QList<Database::ZoneTransitionRecord>      zones;
         QList<Database::ClientScreenEventRecord>   clientScreenEvents;
         QList<Database::AfkRecord>                 afkRecords;
+        QList<Database::AltTabRecord>              altTabRecords;
     };
 
     explicit QueryService(const QString &dbPath, QObject *parent = nullptr);

@@ -6,7 +6,6 @@
 
 #include <QList>
 #include <QMap>
-#include <QPair>
 #include <QResizeEvent>
 #include <QWidget>
 
@@ -80,10 +79,7 @@ private:
     QTimer                   *m_scrollSettleTimer{};
 
     NotificationWidget  *m_prevZoneCard{};
-    NotificationWidget  *m_prevAltTabCard{};
-    // Each entry is {HH:mm timestamp, durationSecs}; -1 duration = still active (tabbed out).
-    // Survives rebuilds so all cycles in the current session stay visible.
-    QList<QPair<QString,int>> m_altTabs;
     QWidget             *m_sessionStartCard{};
+    QString              m_dbAltTabOutTs;  // out_at of the pending alt-tab record currently shown via DB
     ScrollJumpButton    *m_scrollDownBtn{};
 };

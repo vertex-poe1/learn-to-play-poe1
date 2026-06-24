@@ -165,6 +165,17 @@ public:
     // limit > 0 caps the result.
     QList<AfkRecord> fetchAfkRecords(int limit = 0) const;
 
+    struct AltTabRecord
+    {
+        QString outAt;        // "YYYY-MM-DD HH:MM:SS"
+        QString inAt;         // empty if still alt-tabbed out
+        int     durationSecs{-1}; // computed; -1 if still out
+    };
+
+    // Returns alt-tab intervals for the most recent open session, newest first.
+    // limit > 0 caps the result.
+    QList<AltTabRecord> fetchAltTabRecords(int limit = 0) const;
+
 private:
     void applyPragmas();
     void initSchema();

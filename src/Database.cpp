@@ -8,7 +8,7 @@
 #include <QFile>
 #include <QHash>
 
-static constexpr int kDbVersion = 4;
+static constexpr int kDbVersion = 5;
 
 static void execSql(sqlite3 *db, const char *sql)
 {
@@ -375,8 +375,18 @@ QStringList Database::fetchChatDates(const QSet<QChar> &channels, bool includeDm
 
 void Database::migrate(int fromVersion)
 {
-    // Add version blocks here as needed, e.g.:
-    // if (fromVersion == 1) { ...; setUserVersion(m_db, 2); fromVersion = 2; }
+    if (fromVersion < 5) {
+        execSql(m_db,
+            "CREATE TABLE IF NOT EXISTS session_alt_tabs ("
+            "    id         INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "    session_id INTEGER NOT NULL REFERENCES sessions(id),"
+            "    out_at     TEXT    NOT NULL,"
+            "    in_at      TEXT,"
+            "    UNIQUE(session_id, out_at)"
+            ");");
+        setUserVersion(m_db, 5);
+        fromVersion = 5;
+    }
 
     if (fromVersion < kDbVersion) {
         qWarning("[DB] stale schema version %d, expected %d — delete the database to start fresh",
@@ -684,6 +694,41 @@ QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, 
             r.enteredAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
         r.durationSecs = sqlite3_column_type(stmt, 6) != SQLITE_NULL
                          ? sqlite3_column_int(stmt, 6) : -1;
+        result.append(r);
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+QList<Database::AltTabRecord> Database::fetchAltTabRecords(int limit) const
+{
+    QList<AltTabRecord> result;
+    if (!m_db) return result;
+    armQueryBudget();
+
+    static const char *sql = R"(
+        SELECT out_at, in_at,
+               CAST((strftime('%s', in_at) - strftime('%s', out_at)) AS INTEGER)
+        FROM session_alt_tabs
+        WHERE session_id = (
+            SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+        )
+        ORDER BY out_at DESC
+        LIMIT ?
+    )";
+
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return result;
+    sqlite3_bind_int(stmt, 1, limit > 0 ? limit : -1);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        AltTabRecord r;
+        if (auto *p = sqlite3_column_text(stmt, 0))
+            r.outAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 1))
+            r.inAt  = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        r.durationSecs = sqlite3_column_type(stmt, 2) != SQLITE_NULL
+                         ? sqlite3_column_int(stmt, 2) : -1;
         result.append(r);
     }
     sqlite3_finalize(stmt);

@@ -21,3 +21,4 @@ dev/log_split/filtered_sql/
 bin/
 logs/
 *.log
+*.dmp

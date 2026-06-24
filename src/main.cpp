@@ -27,6 +27,98 @@ static void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const
     s_logStream->flush();
 }
 
+// ---------------------------------------------------------------------------
+// Crash handler — Windows only
+// ---------------------------------------------------------------------------
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <DbgHelp.h>
+#include <cstdlib>
+#include <exception>
+
+static wchar_t s_crashLogPath [MAX_PATH] = {};
+static wchar_t s_crashDumpPath[MAX_PATH] = {};
+
+// Safe to call from the crash handler: no heap, no CRT, direct Win32 I/O.
+static void writeCrashEntry(const char *detail)
+{
+    if (!s_crashLogPath[0]) return;
+    HANDLE h = CreateFileW(s_crashLogPath,
+                           FILE_APPEND_DATA,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE,
+                           nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    char line[512];
+    int n = wsprintfA(line, "%02d:%02d:%02d.000 [F] [crash] %s\n",
+                      (int)t.wHour, (int)t.wMinute, (int)t.wSecond, detail);
+    DWORD written;
+    WriteFile(h, line, (DWORD)n, &written, nullptr);
+    CloseHandle(h);
+}
+
+static void writeCrashDump(EXCEPTION_POINTERS *ep)
+{
+    if (!s_crashDumpPath[0]) return;
+    HANDLE hFile = CreateFileW(s_crashDumpPath, GENERIC_WRITE, 0,
+                               nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) return;
+
+    MINIDUMP_EXCEPTION_INFORMATION mei{};
+    if (ep) {
+        mei.ThreadId          = GetCurrentThreadId();
+        mei.ExceptionPointers = ep;
+        mei.ClientPointers    = FALSE;
+    }
+    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
+                      static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithThreadInfo),
+                      ep ? &mei : nullptr, nullptr, nullptr);
+    CloseHandle(hFile);
+}
+
+static LONG WINAPI unhandledExceptionFilter(EXCEPTION_POINTERS *ep)
+{
+    char detail[256];
+    const DWORD code = ep->ExceptionRecord->ExceptionCode;
+    const void *addr = ep->ExceptionRecord->ExceptionAddress;
+    if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+        const char *rw     = ep->ExceptionRecord->ExceptionInformation[0] == 1 ? "write" : "read";
+        const void *target = reinterpret_cast<void *>(ep->ExceptionRecord->ExceptionInformation[1]);
+        wsprintfA(detail, "ACCESS_VIOLATION (%s %p) at %p", rw, target, addr);
+    } else {
+        wsprintfA(detail, "exception code=0x%08X at %p", static_cast<unsigned>(code), addr);
+    }
+    writeCrashEntry(detail);
+    writeCrashDump(ep);
+    return EXCEPTION_CONTINUE_SEARCH; // let Windows show its normal crash dialog
+}
+
+static void terminateHandler()
+{
+    writeCrashEntry("std::terminate called (uncaught exception or pure-virtual call)");
+    writeCrashDump(nullptr);
+    std::abort();
+}
+
+static void setupCrashHandler(const QString &logPath)
+{
+    QString dumpPath = logPath;
+    if (dumpPath.endsWith(QLatin1String(".log")))
+        dumpPath.chop(4);
+    dumpPath += QLatin1String("_crash.dmp");
+
+    int n = logPath.toWCharArray(s_crashLogPath);
+    s_crashLogPath[n] = L'\0';
+    n = dumpPath.toWCharArray(s_crashDumpPath);
+    s_crashDumpPath[n] = L'\0';
+
+    SetUnhandledExceptionFilter(unhandledExceptionFilter);
+    std::set_terminate(terminateHandler);
+}
+#endif
+// ---------------------------------------------------------------------------
+
 int main(int argc, char *argv[])
 {
     const int cliResult = cliDispatch(argc, argv);
@@ -48,6 +140,9 @@ int main(int argc, char *argv[])
         if (s_logFile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
             s_logStream = new QTextStream(s_logFile);
             qInstallMessageHandler(fileMessageHandler);
+#ifdef Q_OS_WIN
+            setupCrashHandler(s_logFile->fileName());
+#endif
         }
     }
 
