@@ -17,6 +17,7 @@ public:
         QList<Database::SessionEventRecord>        sessionEvents;
         QList<Database::ZoneTransitionRecord>      zones;
         QList<Database::ClientScreenEventRecord>   clientScreenEvents;
+        QList<Database::AfkRecord>                 afkRecords;
     };
 
     explicit QueryService(const QString &dbPath, QObject *parent = nullptr);

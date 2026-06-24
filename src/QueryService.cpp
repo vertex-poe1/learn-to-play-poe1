@@ -52,6 +52,7 @@ void QueryService::fetchCurrentPageData(int sessionEventLimit, int zoneLimit,
             if (zoneLimit > 0) {
                 data.zones = worker->db().fetchZoneTransitions(zoneLimit, 0);
                 data.clientScreenEvents = worker->db().fetchClientScreenEvents();
+                data.afkRecords = worker->db().fetchAfkRecords(zoneLimit);
             }
             QMetaObject::invokeMethod(qs,
                 [self, data = std::move(data), cb = std::move(cb)]() mutable {

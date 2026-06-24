@@ -154,6 +154,17 @@ public:
     // recent open session, newest first.
     QList<ClientScreenEventRecord> fetchClientScreenEvents() const;
 
+    struct AfkRecord
+    {
+        QString afkOnAt;      // "YYYY-MM-DD HH:MM:SS"
+        QString afkOffAt;     // empty if the player is still AFK
+        int     durationSecs{-1}; // computed; -1 if still open
+    };
+
+    // Returns AFK intervals for the most recent open session, newest first.
+    // limit > 0 caps the result.
+    QList<AfkRecord> fetchAfkRecords(int limit = 0) const;
+
 private:
     void applyPragmas();
     void initSchema();

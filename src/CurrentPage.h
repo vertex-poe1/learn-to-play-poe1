@@ -6,6 +6,7 @@
 
 #include <QList>
 #include <QMap>
+#include <QPair>
 #include <QResizeEvent>
 #include <QWidget>
 
@@ -80,6 +81,9 @@ private:
 
     NotificationWidget  *m_prevZoneCard{};
     NotificationWidget  *m_prevAltTabCard{};
+    // Each entry is {HH:mm timestamp, durationSecs}; -1 duration = still active (tabbed out).
+    // Survives rebuilds so all cycles in the current session stay visible.
+    QList<QPair<QString,int>> m_altTabs;
     QWidget             *m_sessionStartCard{};
     ScrollJumpButton    *m_scrollDownBtn{};
 };

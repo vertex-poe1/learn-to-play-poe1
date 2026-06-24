@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <QDate>
-#include <QDebug>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QHash>
@@ -652,24 +651,6 @@ QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, 
     if (!m_db) return result;
     armQueryBudget();
 
-    // Log the session this query will bind to.
-    {
-        sqlite3_stmt *dbgStmt = nullptr;
-        if (sqlite3_prepare_v2(m_db,
-                "SELECT id, started_at, ended_at FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1;",
-                -1, &dbgStmt, nullptr) == SQLITE_OK) {
-            if (sqlite3_step(dbgStmt) == SQLITE_ROW) {
-                const qint64 sid = sqlite3_column_int64(dbgStmt, 0);
-                const char  *sta = reinterpret_cast<const char *>(sqlite3_column_text(dbgStmt, 1));
-                qDebug() << "[db] fetchZoneTransitions: open session id=" << sid
-                         << "started_at=" << (sta ? sta : "(null)");
-            } else {
-                qDebug() << "[db] fetchZoneTransitions: no open session found";
-            }
-            sqlite3_finalize(dbgStmt);
-        }
-    }
-
     static const char *sql = R"(
         SELECT COALESCE(a.display_name, a.code), a.code, a.type, a.subtype, a.level, ats.entered_at, ats.duration_secs
         FROM area_time_spans ats
@@ -706,8 +687,6 @@ QList<Database::ZoneTransitionRecord> Database::fetchZoneTransitions(int limit, 
         result.append(r);
     }
     sqlite3_finalize(stmt);
-    qDebug() << "[db] fetchZoneTransitions: returned" << result.size() << "rows"
-             << "(limit=" << limit << "offset=" << offset << ")";
     return result;
 }
 
@@ -735,6 +714,41 @@ QList<Database::ClientScreenEventRecord> Database::fetchClientScreenEvents() con
             r.eventType  = QString::fromUtf8(reinterpret_cast<const char *>(p));
         if (auto *p = sqlite3_column_text(stmt, 1))
             r.occurredAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        result.append(r);
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+QList<Database::AfkRecord> Database::fetchAfkRecords(int limit) const
+{
+    QList<AfkRecord> result;
+    if (!m_db) return result;
+    armQueryBudget();
+
+    static const char *sql = R"(
+        SELECT afk_on_at, afk_off_at,
+               CAST((strftime('%s', afk_off_at) - strftime('%s', afk_on_at)) AS INTEGER)
+        FROM session_afk
+        WHERE session_id = (
+            SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+        )
+        ORDER BY afk_on_at DESC
+        LIMIT ?
+    )";
+
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return result;
+    sqlite3_bind_int(stmt, 1, limit > 0 ? limit : -1);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        AfkRecord r;
+        if (auto *p = sqlite3_column_text(stmt, 0))
+            r.afkOnAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        if (auto *p = sqlite3_column_text(stmt, 1))
+            r.afkOffAt = QString::fromUtf8(reinterpret_cast<const char *>(p));
+        r.durationSecs = sqlite3_column_type(stmt, 2) != SQLITE_NULL
+                         ? sqlite3_column_int(stmt, 2) : -1;
         result.append(r);
     }
     sqlite3_finalize(stmt);
