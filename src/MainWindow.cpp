@@ -76,9 +76,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_navBar = new NavBar({"Guide", "Chat", "Stash", "Profile", "Log"}, this);
     m_navBar->setCurrentIndex(TabGuide);
     m_stack->setCurrentIndex(TabGuide);
-    connect(m_navBar, &NavBar::currentChanged, this, &MainWindow::onTabChanged);
+    connect(m_navBar, &NavBar::currentChanged,  this, &MainWindow::onTabChanged);
     connect(m_navBar, &NavBar::settingsClicked, this, &MainWindow::onGearClicked);
-    connect(m_navBar, &NavBar::searchClicked, this, &MainWindow::onSearchClicked);
+    connect(m_navBar, &NavBar::searchClicked,   this, &MainWindow::onSearchClicked);
 
     auto *container = new QWidget(this);
     auto *vbox = new QVBoxLayout(container);
@@ -92,7 +92,6 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[startup] UI built in" << startupTimer.elapsed() << "ms";
     m_config = AppConfig::load();
     qDebug() << "[startup] config loaded in" << startupTimer.elapsed() << "ms";
-    m_navBar->setCurrentIndex(qBound(int(TabGuide), m_config.defaultTab, int(TabLog)));
 
     m_settingsPage = new SettingsPage(m_config, this);
     m_stack->addWidget(m_settingsPage); // TabSettings
@@ -102,6 +101,17 @@ MainWindow::MainWindow(QWidget *parent)
     m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabSearch
     m_stack->addWidget(m_currentPage);                        // TabCurrent
     m_stack->addWidget(m_dmPage);                             // TabDms
+
+    // Restore default tab. DMs and Current are sub-pages (not navbar tabs), so
+    // navigate to the parent navbar tab first, then override the stack index.
+    {
+        const int dt = qBound(0, m_config.defaultTab, 6);
+        const int navIdx[]   = { TabGuide, TabChats, TabChats, TabStash, TabProfile, TabLog,     TabLog };
+        const int stackIdx[] = { TabGuide, TabChats, TabDms,   TabStash, TabProfile, TabCurrent, TabLog };
+        m_navBar->setCurrentIndex(navIdx[dt]);
+        if (stackIdx[dt] != navIdx[dt])
+            m_stack->setCurrentIndex(stackIdx[dt]);
+    }
 
     connect(m_pastPage, &PastPage::viewCurrentRequested,
             this, [this] { m_stack->setCurrentIndex(TabCurrent); });

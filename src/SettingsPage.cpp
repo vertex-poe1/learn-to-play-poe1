@@ -269,8 +269,8 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     windowForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_defaultTab = new QComboBox(windowContent);
-    m_defaultTab->addItems({"Past", "Current", "Chats", "DMs"});
-    m_defaultTab->setCurrentIndex(qBound(0, config.defaultTab, 3));
+    m_defaultTab->addItems({"Guide", "Chat", "DMs", "Stash", "Profile", "Current Log", "Past Logs"});
+    m_defaultTab->setCurrentIndex(qBound(0, config.defaultTab, 6));
     m_defaultTab->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     windowForm->addRow("Default tab:", m_defaultTab);
 

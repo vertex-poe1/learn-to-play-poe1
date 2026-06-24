@@ -85,7 +85,7 @@ AppConfig AppConfig::load()
         cfg.useGameOverlay        = tbl["use_game_overlay"].value_or(true);
         cfg.autoUpdate            = tbl["auto_update"].value_or(true);
         cfg.autoStartOnBoot       = tbl["auto_start_on_boot"].value_or(false);
-        cfg.defaultTab            = (int)tbl["default_tab"].value_or<int64_t>(2) - 1;
+        cfg.defaultTab            = qBound(0, (int)tbl["default_tab"].value_or<int64_t>(6) - 1, 6);
         cfg.startMinimized        = tbl["start_minimized"].value_or(false);
         cfg.minimizeToTray        = tbl["minimize_to_tray"].value_or(true);
         cfg.autoDetectInstallDir  = tbl["auto_detect_install_dir"].value_or(true);
