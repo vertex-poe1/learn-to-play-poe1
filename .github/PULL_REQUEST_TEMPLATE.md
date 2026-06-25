@@ -33,5 +33,5 @@
       [Developer Certificate of Origin](https://developercertificate.org/).
 - [ ] I license this contribution under the MIT License, as described in
       [CONTRIBUTING.md](../CONTRIBUTING.md), allowing it to be incorporated
-      into both the AGPL-licensed public release and any alternate
+      into both the AGPL-licensed public release and any alternate-licensed
       release of this project.
