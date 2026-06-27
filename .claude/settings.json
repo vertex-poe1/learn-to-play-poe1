@@ -42,7 +42,11 @@
       "Bash(wsl gh run view *)",
       "Bash(wsl gh api *)",
       "Bash(wsl gh *)",
-      "Bash(python -m aqt list-qt * )"
+      "Bash(python -m aqt list-qt * )",
+      "Bash(\"src/test_log_startup.exe\" *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(time *)",
+      "Bash(ctest *)"
     ]
   }
 }

@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Svg Widgets Test WebEngineWidgets)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 enable_testing()
 

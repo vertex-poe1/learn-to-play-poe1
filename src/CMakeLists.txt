@@ -1,5 +1,5 @@
 find_package(tomlplusplus CONFIG REQUIRED)
-find_package(unofficial-sqlite3 CONFIG REQUIRED)
+# unofficial-sqlite3 is found in the root CMakeLists so tests/ can also use it.
 include(FetchContent)
 set(BUILD_WITH_QT6          ON  CACHE BOOL "" FORCE)
 set(BUILD_TRANSLATIONS      OFF CACHE BOOL "" FORCE)
