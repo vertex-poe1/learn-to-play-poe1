@@ -61,6 +61,13 @@ void StartupTimingTest::sessionListVisible()
         }
 
         const QByteArray output = p.readAll();
+        QVERIFY2(finished,
+                 qPrintable(QString("Run %1: process timed out (output: %2)")
+                     .arg(i + 1).arg(QString::fromUtf8(output).left(500))));
+        QVERIFY2(p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0,
+                 qPrintable(QString("Run %1: process exited abnormally (status %2, code %3, output: %4)")
+                     .arg(i + 1).arg(p.exitStatus()).arg(p.exitCode())
+                     .arg(QString::fromUtf8(output).left(500))));
         QVERIFY2(output.contains("STARTUP_TIMING:populated"),
                  qPrintable(QString("Run %1: marker not found in output: %2")
                      .arg(i + 1).arg(QString::fromUtf8(output).left(500))));
