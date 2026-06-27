@@ -7,5 +7,5 @@
 
 ## Build Verification
 
-- Always run `cmake --build build/windows-msvc` after making code changes
+- Always run `just build` after making code changes
 - Do not ask the user to test until the build passes

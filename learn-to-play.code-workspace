@@ -9,6 +9,15 @@
     },
   ],
   "settings": {
+    "terminal.integrated.profiles.windows": {
+      "Git Bash (MSVC x64)": {
+        "path": "${env:ProgramFiles}/Git/bin/bash.exe",
+        "args": ["--rcfile", "${workspaceFolder}/tools/msvc-env.sh", "-i"],
+        "icon": "terminal-bash",
+        "overrideName": true
+      }
+    },
+    "terminal.integrated.defaultProfile.windows": "Git Bash (MSVC x64)",
     "claudeCode.environmentVariables": [{ "name": "NO_COLOR", "value": "1" }],
     "claudeCode.initialPermissionMode": "acceptEdits",
     "chat.tools.terminal.autoApprove": {

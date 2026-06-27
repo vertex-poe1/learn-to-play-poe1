@@ -15,11 +15,14 @@ configure preset=default_preset:
 # Build (configures first if needed)
 [windows]
 build preset=default_preset:
-    -Remove-Item -Path "bin/l2p-poe1.exe" -ErrorAction SilentlyContinue
-    cmake --preset {{preset}}
-    cmake --build --preset {{preset}}
-    New-Item -ItemType Directory -Force -Path "bin" | Out-Null
-    Copy-Item -Path "build/{{preset}}/src/l2p-poe1.exe" -Destination "bin/" -Force -ErrorAction Stop
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"; \
+    $vs = & $vswhere -latest -property installationPath; \
+    $vcvars = "$vs\VC\Auxiliary\Build\vcvarsall.bat"; \
+    cmd /c "`"$vcvars`" x64 >NUL 2>&1 && cmake --preset {{preset}} && cmake --build --preset {{preset}}"; \
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; \
+    Remove-Item -Path "bin/l2p-poe1.exe" -ErrorAction SilentlyContinue; \
+    New-Item -ItemType Directory -Force -Path "bin" | Out-Null; \
+    Copy-Item -Path "build/{{preset}}/src/l2p-poe1.exe" -Destination "bin/" -Force -ErrorAction Stop; \
     Copy-Item -Path "build/{{preset}}/src/*.dll" -Destination "bin/" -Force -ErrorAction SilentlyContinue
 
 [unix]

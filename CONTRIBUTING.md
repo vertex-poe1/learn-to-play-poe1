@@ -30,9 +30,78 @@ All data originates from `Client.txt`. There is no network access, no GGG API ca
 
 ## Building
 
-The project uses C++17, Qt 6, CMake, and vcpkg. See [ADR-001](docs/decisions/001-technology-stack.md) for the full rationale behind this stack and the per-platform deployment approach (`windeployqt` on Windows, AppImage on Linux, `macdeployqt` on macOS).
+The project uses C++20, Qt 6, CMake, and vcpkg. See [ADR-001](docs/decisions/001-technology-stack.md) for the full rationale behind this stack and the per-platform deployment approach (`windeployqt` on Windows, AppImage on Linux, `macdeployqt` on macOS).
 
-Build instructions will be documented before the first public release.
+### Windows setup
+
+#### 1. Install Visual Studio 2022
+
+Download and install [Visual Studio 2022](https://visualstudio.microsoft.com/) (Community edition is fine). During installation, select the **Desktop development with C++** workload.
+
+#### 2. Install Qt 6.11.1
+
+1. Create a free account at [qt.io](https://www.qt.io/)
+2. Once logged in, download the Qt Online Installer from [my.qt.io/download](https://my.qt.io/download)
+3. Run the installer. Under **Qt for Development → Qt → Qt 6.11.1**, check:
+   - **MSVC 2022 64-bit** — the compiler kit (do not select the MinGW build)
+   - Under **MSVC 2022 64-bit → Additional Libraries**: **Qt Positioning**
+4. Still under **Qt 6.11.1**, expand **Extensions** and check **Qt WebEngine for Qt 6.11.1**
+5. Under **Qt for Development → Qt → Build Tools**, check:
+   - **MinGW 13.1.0 64-bit** (provides Unix-style shell tools)
+   - **CMake**
+   - **Ninja**
+
+#### 3. Install vcpkg
+
+Follow the [Microsoft vcpkg quickstart](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell) to clone and bootstrap vcpkg. Note the folder you install it to.
+
+CMake ships with Qt, but if you run into version problems you can also install it separately from [cmake.org/download](https://cmake.org/download/).
+
+#### 4. Set environment variables
+
+Open **System Properties → Environment Variables** and add the following **user variables** (replacing `<drive>\<folder>` with wherever you installed each tool):
+
+| Variable | Value |
+|----------|-------|
+| `QT_ROOT_DIR` | `<drive>\<folder>\Qt\6.11.1\msvc2022_64` |
+| `VCPKG_ROOT` | `<drive>\<folder>\vcpkg` |
+
+Then edit the **`Path`** user variable and add these entries:
+
+```
+%VCPKG_ROOT%
+<drive>\<folder>\Qt\Tools\Ninja
+<drive>\<folder>\Qt\6.11.1\msvc2022_64\bin
+<drive>\<folder>\Qt\Tools\mingw1310_64\bin
+```
+
+If you installed CMake separately, also add:
+
+```
+<drive>\<folder>\CMake\bin
+```
+
+Restart any open terminals (and VS Code) after changing environment variables.
+
+#### 5. Build
+
+Open this repository in VS Code. The default terminal profile is **Git Bash (MSVC x64)**, which automatically locates your VS installation and loads the MSVC compiler environment — no Developer Command Prompt required.
+
+```bash
+# First-time configure — vcpkg downloads and builds dependencies (takes a few minutes)
+cmake --preset windows-msvc
+
+# Build
+cmake --build build/windows-msvc
+```
+
+Subsequent builds are fast: Ninja skips anything unchanged and exits immediately with `ninja: no work to do.` when nothing has changed.
+
+#### 6. Run
+
+```bash
+./build/windows-msvc/src/l2p-poe1.exe
+```
 
 ## Database schema
 

@@ -2,6 +2,17 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Run (windows-msvc)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/windows-msvc/src/l2p-poe1.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "preLaunchTask": "just build (windows-msvc)"
+    },
+    {
       "name": "Run (windows-mingw)",
       "type": "cppdbg",
       "request": "launch",

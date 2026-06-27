@@ -47,6 +47,24 @@
       "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
+      "label": "just build (windows-msvc)",
+      "type": "shell",
+      "command": "just",
+      "args": ["build"],
+      "group": "build",
+      "problemMatcher": ["$msCompile"],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "just test (windows-msvc)",
+      "type": "shell",
+      "command": "just",
+      "args": ["test"],
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
       "label": "CMake: Clean",
       "type": "shell",
       "command": "cmake",
