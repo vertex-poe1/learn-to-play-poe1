@@ -143,6 +143,8 @@ qt_add_resources(l2p-poe1 "svgicons"
         "${CMAKE_SOURCE_DIR}/assets/icons/person-fill.svg"
         "${CMAKE_SOURCE_DIR}/assets/icons/clipboard-fill.svg"
         "${CMAKE_SOURCE_DIR}/assets/icons/search.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/fleur-de-lis.svg"
+        "${CMAKE_SOURCE_DIR}/assets/icons/fleur-de-lis-shield.svg"
 )
 
 qt_add_resources(l2p-poe1 "brandsvg"

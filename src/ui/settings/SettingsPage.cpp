@@ -275,6 +275,74 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     m_enableOverlay->setChecked(config.useGameOverlay);
     overlayForm->addRow("Enable overlay:", m_enableOverlay);
 
+    auto *layoutContainer = new QWidget(overlayContent);
+    auto *layoutHBox = new QHBoxLayout(layoutContainer);
+    layoutHBox->setContentsMargins(0, 0, 0, 0);
+
+    m_overlayLayout = new QComboBox(layoutContainer);
+    m_overlayLayout->addItem("Vertical");
+    m_overlayLayout->addItem("Horizontal");
+    m_overlayLayout->setCurrentIndex(config.overlayLayoutVertical ? 0 : 1);
+    
+    layoutHBox->addWidget(m_overlayLayout);
+    layoutHBox->addStretch();
+    
+    overlayForm->addRow("Icon layout orientation:", layoutContainer);
+
+    auto *teleportHeader = new QLabel("<b>Teleport Shortcuts</b>", overlayContent);
+    overlayForm->addRow(teleportHeader);
+
+    m_overlayHideout = new QCheckBox(overlayContent);
+    m_overlayHideout->setChecked(config.overlayShowHideout);
+    auto *hideoutLabel = new QLabel("<img src=':/icons/fleur-de-lis.svg' width='18' height='18' style='vertical-align: middle;'> Hideout (/hideout):", overlayContent);
+    overlayForm->addRow(hideoutLabel, m_overlayHideout);
+
+    const auto addPlaceholder = [&](const QString &label, bool checked) {
+        auto *cb = new QCheckBox(overlayContent);
+        cb->setChecked(checked);
+        cb->setEnabled(false);
+        overlayForm->addRow(label, cb);
+    };
+
+    m_overlayGuild = new QCheckBox(overlayContent);
+    m_overlayGuild->setChecked(config.overlayShowGuild);
+    
+    auto *guildLabelWidget = new QWidget(overlayContent);
+    auto *guildLabelLayout = new QHBoxLayout(guildLabelWidget);
+    guildLabelLayout->setContentsMargins(0, 0, 0, 0);
+    guildLabelLayout->setSpacing(4);
+    
+    auto *guildIconLabel = new QLabel(guildLabelWidget);
+    guildIconLabel->setPixmap(QIcon(":/icons/fleur-de-lis-shield.svg").pixmap(18, 18));
+    
+    auto *guildTextLabel = new QLabel("Guild (/guild):", guildLabelWidget);
+    guildLabelLayout->addWidget(guildIconLabel);
+    guildLabelLayout->addWidget(guildTextLabel);
+    guildLabelLayout->addStretch();
+    
+    overlayForm->addRow(guildLabelWidget, m_overlayGuild);
+
+    addPlaceholder("Menagerie (/menagerie):", false);
+    addPlaceholder("Delve (/delve):", false);
+    addPlaceholder("Sanctum (/sanctum):", false);
+    addPlaceholder("Kingsmarch (/kingsmarch):", true);
+    addPlaceholder("Heist (/heist):", false);
+    addPlaceholder("Monastery (/monastery):", true);
+
+    auto *infoHeader = new QLabel("<br><b>Informational</b>", overlayContent);
+    overlayForm->addRow(infoHeader);
+
+    addPlaceholder("Top 10 Ladder (/ladder):", false);
+    addPlaceholder("Time Played (/played):", false);
+    addPlaceholder("Character Age (/age):", false);
+    addPlaceholder("Passives (/passives):", false);
+    addPlaceholder("Deaths (/deaths):", false);
+    addPlaceholder("Monsters Remaining (/remaining):", false);
+    addPlaceholder("Atlas Passives (/atlaspassives):", false);
+    addPlaceholder("Kills (/kills):", false);
+    addPlaceholder("Reset XP (/reset_xp):", false);
+    addPlaceholder("Reload Item Filter (/reloaditemfilter):", true);
+
     m_stack->addWidget(overlayContent); // index 2
 
     // ---- Page 3: Window -----------------------------------------------
@@ -677,6 +745,9 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     connect(m_installDirs,    &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
     connect(m_exeNames,       &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
     connect(m_enableOverlay,  &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
+    connect(m_overlayLayout,  &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
+    connect(m_overlayHideout, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
+    connect(m_overlayGuild,   &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_defaultTab,     &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
     connect(m_startMinimized, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_minimizeToTray, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
@@ -931,6 +1002,9 @@ void SettingsPage::saveAndEmit()
     }
     m_config.executableNames = userExes;
     m_config.useGameOverlay  = m_enableOverlay->isChecked();
+    m_config.overlayLayoutVertical = (m_overlayLayout->currentIndex() == 0);
+    m_config.overlayShowHideout    = m_overlayHideout->isChecked();
+    m_config.overlayShowGuild      = m_overlayGuild->isChecked();
     m_config.defaultTab      = m_defaultTab->currentIndex();
     m_config.startMinimized  = m_startMinimized->isChecked();
     m_config.minimizeToTray  = m_minimizeToTray->isChecked();

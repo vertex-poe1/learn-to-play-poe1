@@ -93,6 +93,9 @@ AppConfig AppConfig::load()
         cfg.debugLegacyUserAgentApp = tbl["debug_legacy_user_agent_app"].value_or(AppConfig::kDefaultLegacyUserAgentApp);
         cfg.debugUserAgentQt        = tbl["debug_user_agent_qt"].value_or(AppConfig::kDefaultUserAgentQt);
         cfg.useGameOverlay        = tbl["use_game_overlay"].value_or(true);
+        cfg.overlayLayoutVertical = tbl["overlay_layout_vertical"].value_or(true);
+        cfg.overlayShowHideout    = tbl["overlay_show_hideout"].value_or(true);
+        cfg.overlayShowGuild      = tbl["overlay_show_guild"].value_or(false);
         cfg.autoUpdate            = tbl["auto_update"].value_or(true);
         cfg.autoStartOnBoot       = tbl["auto_start_on_boot"].value_or(false);
         cfg.defaultTab            = qBound(0, (int)tbl["default_tab"].value_or<int64_t>(6) - 1, 6);
@@ -178,6 +181,9 @@ void AppConfig::save() const
     tbl.insert("debug_legacy_user_agent_app", debugLegacyUserAgentApp);
     tbl.insert("debug_user_agent_qt",            debugUserAgentQt);
     tbl.insert("use_game_overlay",        useGameOverlay);
+    tbl.insert("overlay_layout_vertical", overlayLayoutVertical);
+    tbl.insert("overlay_show_hideout",    overlayShowHideout);
+    tbl.insert("overlay_show_guild",      overlayShowGuild);
     tbl.insert("auto_update",             autoUpdate);
     tbl.insert("auto_start_on_boot",      autoStartOnBoot);
     tbl.insert("default_tab",             (int64_t)(defaultTab + 1));

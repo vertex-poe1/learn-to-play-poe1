@@ -32,6 +32,9 @@ struct AppConfig {
     bool    debugLegacyUserAgentApp{kDefaultLegacyUserAgentApp};
     bool    debugUserAgentQt{kDefaultUserAgentQt};
     bool useGameOverlay{true};
+    bool overlayLayoutVertical{true};
+    bool overlayShowHideout{true};
+    bool overlayShowGuild{false};
     bool autoUpdate{true};
     bool autoStartOnBoot{false};
     int  defaultTab{5};          // 0=Guide 1=Chat 2=DMs 3=Stash 4=Profile 5=CurrentLog 6=PastLogs

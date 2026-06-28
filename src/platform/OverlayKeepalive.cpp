@@ -39,8 +39,8 @@ void OverlayKeepalive::run()
                      SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 
         const LONG ex = GetWindowLong(hwnd, GWL_EXSTYLE);
-        if (!(ex & WS_EX_LAYERED) || !(ex & WS_EX_TRANSPARENT))
-            SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+        if (!(ex & WS_EX_LAYERED) || !(ex & WS_EX_NOACTIVATE) || (ex & WS_EX_TRANSPARENT))
+            SetWindowLong(hwnd, GWL_EXSTYLE, (ex | WS_EX_LAYERED | WS_EX_NOACTIVATE) & ~WS_EX_TRANSPARENT);
 
         lock.lock();
     }

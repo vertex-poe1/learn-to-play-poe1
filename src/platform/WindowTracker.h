@@ -11,6 +11,7 @@ struct WindowState {
     QString  executableName;
     QString  startedAt;   // "HH:mm" local time the process was created; empty if unavailable
     quint32  pid{0};
+    quint64  hwnd{0};     // Native window handle, 0 if unavailable or unsupported
 };
 
 class WindowTracker {

@@ -279,6 +279,15 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[startup] WindowTracker done in" << startupTimer.elapsed() << "ms";
 
     m_overlay = new GameOverlay(this);
+    m_overlay->setLayoutVertical(m_config.overlayLayoutVertical);
+    m_overlay->setHideoutVisible(m_config.overlayShowHideout);
+    m_overlay->setGuildVisible(m_config.overlayShowGuild);
+
+    connect(m_overlay, &GameOverlay::showMainWindowRequested, this, [this]() {
+        showNormal();
+        activateWindow();
+        raise();
+    });
 
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(1000);
@@ -363,6 +372,9 @@ void MainWindow::onConfigChanged()
     m_chatPage->setShowGuildTags(m_config.showGuildTags);
     m_dmPage->setShowGuildTags(m_config.showGuildTags);
     m_ruleEngine->setRules(m_config.liveAlertRules);
+    m_overlay->setLayoutVertical(m_config.overlayLayoutVertical);
+    m_overlay->setHideoutVisible(m_config.overlayShowHideout);
+    m_overlay->setGuildVisible(m_config.overlayShowGuild);
 }
 
 void MainWindow::onPollTimer()
@@ -405,6 +417,7 @@ void MainWindow::onPollTimer()
     }
     m_overlay->updateGameRect(m_lastGameRect);
     m_overlay->setGameVisible(anyRunning && m_config.useGameOverlay);
+    m_overlay->setGameHwnd(anyRunning ? states[0].hwnd : 0);
 
     // Auto-detect install dirs for all running instances.
     if (m_config.autoDetectInstallDir) {

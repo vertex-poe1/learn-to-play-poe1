@@ -47,6 +47,7 @@ BOOL CALLBACK enumWindowsProc(HWND hwnd, LPARAM lParam)
                 state.executableName = baseName;
                 state.installDir     = QFileInfo(fullPath).absolutePath();
                 state.pid            = static_cast<quint32>(pid);
+                state.hwnd           = reinterpret_cast<quint64>(hwnd);
                 if (!IsIconic(hwnd)) {
                     RECT r = {};
                     GetWindowRect(hwnd, &r);

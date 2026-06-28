@@ -50,6 +50,9 @@ private:
 
     // Overlay page
     QCheckBox  *m_enableOverlay{};
+    QComboBox  *m_overlayLayout{};
+    QCheckBox  *m_overlayHideout{};
+    QCheckBox  *m_overlayGuild{};
 
     // Window page
     QComboBox  *m_defaultTab{};
