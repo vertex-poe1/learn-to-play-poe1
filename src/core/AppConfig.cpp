@@ -96,6 +96,7 @@ AppConfig AppConfig::load()
         cfg.overlayLayoutVertical = tbl["overlay_layout_vertical"].value_or(true);
         cfg.overlayShowHideout    = tbl["overlay_show_hideout"].value_or(true);
         cfg.overlayShowGuild      = tbl["overlay_show_guild"].value_or(false);
+        cfg.overlayShowL2P        = tbl["overlay_show_l2p"].value_or(true);
         cfg.autoUpdate            = tbl["auto_update"].value_or(true);
         cfg.autoStartOnBoot       = tbl["auto_start_on_boot"].value_or(false);
         cfg.defaultTab            = qBound(0, (int)tbl["default_tab"].value_or<int64_t>(6) - 1, 6);
@@ -184,6 +185,7 @@ void AppConfig::save() const
     tbl.insert("overlay_layout_vertical", overlayLayoutVertical);
     tbl.insert("overlay_show_hideout",    overlayShowHideout);
     tbl.insert("overlay_show_guild",      overlayShowGuild);
+    tbl.insert("overlay_show_l2p",        overlayShowL2P);
     tbl.insert("auto_update",             autoUpdate);
     tbl.insert("auto_start_on_boot",      autoStartOnBoot);
     tbl.insert("default_tab",             (int64_t)(defaultTab + 1));

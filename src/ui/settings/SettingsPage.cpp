@@ -292,22 +292,38 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     auto *teleportHeader = new QLabel("<b>Teleport Shortcuts</b>", overlayContent);
     overlayForm->addRow(teleportHeader);
 
+    m_overlayL2P = new QCheckBox(overlayContent);
+    m_overlayL2P->setChecked(config.overlayShowL2P);
+    auto *l2pLabel = new QLabel("<span style=\"color: #c8a84b; font-family: 'Palatino Linotype', 'Book Antiqua', 'Palatino', serif; font-size: 14px; font-weight: bold; font-style: italic; letter-spacing: 2px;\">l2p</span> App Focus:", overlayContent);
+    overlayForm->addRow(l2pLabel, m_overlayL2P);
+
     m_overlayHideout = new QCheckBox(overlayContent);
     m_overlayHideout->setChecked(config.overlayShowHideout);
-    auto *hideoutLabel = new QLabel("<img src=':/icons/fleur-de-lis.svg' width='18' height='18' style='vertical-align: middle;'> Hideout (/hideout):", overlayContent);
+    m_overlayHideout->setToolTip("/hideout");
+    auto *hideoutLabel = new QLabel("<img src=':/icons/fleur-de-lis.svg' width='18' height='18' style='vertical-align: middle;'> Hideout:", overlayContent);
+    hideoutLabel->setToolTip("/hideout");
     overlayForm->addRow(hideoutLabel, m_overlayHideout);
 
-    const auto addPlaceholder = [&](const QString &label, bool checked) {
+    const auto addPlaceholder = [&](const QString &label, const QString &cmd, bool checked) {
+        auto *l = new QLabel(label + ":", overlayContent);
+        if (!cmd.isEmpty()) {
+            l->setToolTip(cmd);
+        }
         auto *cb = new QCheckBox(overlayContent);
         cb->setChecked(checked);
         cb->setEnabled(false);
-        overlayForm->addRow(label, cb);
+        if (!cmd.isEmpty()) {
+            cb->setToolTip(cmd);
+        }
+        overlayForm->addRow(l, cb);
     };
 
     m_overlayGuild = new QCheckBox(overlayContent);
     m_overlayGuild->setChecked(config.overlayShowGuild);
+    m_overlayGuild->setToolTip("/guild");
     
     auto *guildLabelWidget = new QWidget(overlayContent);
+    guildLabelWidget->setToolTip("/guild");
     auto *guildLabelLayout = new QHBoxLayout(guildLabelWidget);
     guildLabelLayout->setContentsMargins(0, 0, 0, 0);
     guildLabelLayout->setSpacing(4);
@@ -315,33 +331,33 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     auto *guildIconLabel = new QLabel(guildLabelWidget);
     guildIconLabel->setPixmap(QIcon(":/icons/fleur-de-lis-shield.svg").pixmap(18, 18));
     
-    auto *guildTextLabel = new QLabel("Guild (/guild):", guildLabelWidget);
+    auto *guildTextLabel = new QLabel("Guild:", guildLabelWidget);
     guildLabelLayout->addWidget(guildIconLabel);
     guildLabelLayout->addWidget(guildTextLabel);
     guildLabelLayout->addStretch();
     
     overlayForm->addRow(guildLabelWidget, m_overlayGuild);
 
-    addPlaceholder("Menagerie (/menagerie):", false);
-    addPlaceholder("Delve (/delve):", false);
-    addPlaceholder("Sanctum (/sanctum):", false);
-    addPlaceholder("Kingsmarch (/kingsmarch):", true);
-    addPlaceholder("Heist (/heist):", false);
-    addPlaceholder("Monastery (/monastery):", true);
+    addPlaceholder("Menagerie", "/menagerie", false);
+    addPlaceholder("Delve", "/delve", false);
+    addPlaceholder("Sanctum", "/sanctum", false);
+    addPlaceholder("Kingsmarch", "/kingsmarch", true);
+    addPlaceholder("Heist", "/heist", false);
+    addPlaceholder("Monastery", "/monastery", true);
 
     auto *infoHeader = new QLabel("<br><b>Informational</b>", overlayContent);
     overlayForm->addRow(infoHeader);
 
-    addPlaceholder("Top 10 Ladder (/ladder):", false);
-    addPlaceholder("Time Played (/played):", false);
-    addPlaceholder("Character Age (/age):", false);
-    addPlaceholder("Passives (/passives):", false);
-    addPlaceholder("Deaths (/deaths):", false);
-    addPlaceholder("Monsters Remaining (/remaining):", false);
-    addPlaceholder("Atlas Passives (/atlaspassives):", false);
-    addPlaceholder("Kills (/kills):", false);
-    addPlaceholder("Reset XP (/reset_xp):", false);
-    addPlaceholder("Reload Item Filter (/reloaditemfilter):", true);
+    addPlaceholder("Top 10 Ladder", "/ladder", false);
+    addPlaceholder("Time Played", "/played", false);
+    addPlaceholder("Character Age", "/age", false);
+    addPlaceholder("Passives", "/passives", false);
+    addPlaceholder("Deaths", "/deaths", false);
+    addPlaceholder("Monsters Remaining", "/remaining", false);
+    addPlaceholder("Atlas Passives", "/atlaspassives", false);
+    addPlaceholder("Kills", "/kills", false);
+    addPlaceholder("Reset XP", "/reset_xp", false);
+    addPlaceholder("Reload Item Filter", "/reloaditemfilter", true);
 
     m_stack->addWidget(overlayContent); // index 2
 
@@ -748,6 +764,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     connect(m_overlayLayout,  &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
     connect(m_overlayHideout, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_overlayGuild,   &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
+    connect(m_overlayL2P,     &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_defaultTab,     &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
     connect(m_startMinimized, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_minimizeToTray, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
@@ -1005,6 +1022,7 @@ void SettingsPage::saveAndEmit()
     m_config.overlayLayoutVertical = (m_overlayLayout->currentIndex() == 0);
     m_config.overlayShowHideout    = m_overlayHideout->isChecked();
     m_config.overlayShowGuild      = m_overlayGuild->isChecked();
+    m_config.overlayShowL2P        = m_overlayL2P->isChecked();
     m_config.defaultTab      = m_defaultTab->currentIndex();
     m_config.startMinimized  = m_startMinimized->isChecked();
     m_config.minimizeToTray  = m_minimizeToTray->isChecked();

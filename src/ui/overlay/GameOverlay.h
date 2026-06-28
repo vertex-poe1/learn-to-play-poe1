@@ -26,6 +26,7 @@ public:
     void setLayoutVertical(bool vertical);
     void setHideoutVisible(bool visible);
     void setGuildVisible(bool visible);
+    void setL2PVisible(bool visible);
     void setGameHwnd(quint64 hwnd);
 
 protected:

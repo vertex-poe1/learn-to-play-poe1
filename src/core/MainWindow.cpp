@@ -282,6 +282,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_overlay->setLayoutVertical(m_config.overlayLayoutVertical);
     m_overlay->setHideoutVisible(m_config.overlayShowHideout);
     m_overlay->setGuildVisible(m_config.overlayShowGuild);
+    m_overlay->setL2PVisible(m_config.overlayShowL2P);
 
     connect(m_overlay, &GameOverlay::showMainWindowRequested, this, [this]() {
         showNormal();
@@ -375,6 +376,7 @@ void MainWindow::onConfigChanged()
     m_overlay->setLayoutVertical(m_config.overlayLayoutVertical);
     m_overlay->setHideoutVisible(m_config.overlayShowHideout);
     m_overlay->setGuildVisible(m_config.overlayShowGuild);
+    m_overlay->setL2PVisible(m_config.overlayShowL2P);
 }
 
 void MainWindow::onPollTimer()

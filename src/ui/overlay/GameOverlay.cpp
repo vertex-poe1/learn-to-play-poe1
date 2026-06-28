@@ -256,6 +256,12 @@ void GameOverlay::setGuildVisible(bool visible)
     repositionPanels();
 }
 
+void GameOverlay::setL2PVisible(bool visible)
+{
+    m_infoPanel->setVisible(visible);
+    repositionPanels();
+}
+
 void GameOverlay::setGameHwnd(quint64 hwnd)
 {
     if (m_hideoutIcon)
