@@ -35,6 +35,7 @@ struct AppConfig {
     bool overlayLayoutVertical{true};
     bool overlayShowHideout{true};
     bool overlayShowGuild{false};
+    bool overlayShowMenagerie{false};
     bool overlayShowL2P{true};
     bool autoUpdate{true};
     bool autoStartOnBoot{false};

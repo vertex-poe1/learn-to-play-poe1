@@ -338,7 +338,26 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     
     overlayForm->addRow(guildLabelWidget, m_overlayGuild);
 
-    addPlaceholder("Menagerie", "/menagerie", false);
+    m_overlayMenagerie = new QCheckBox(overlayContent);
+    m_overlayMenagerie->setChecked(config.overlayShowMenagerie);
+    m_overlayMenagerie->setToolTip("/menagerie");
+    
+    auto *menagerieLabelWidget = new QWidget(overlayContent);
+    menagerieLabelWidget->setToolTip("/menagerie");
+    auto *menagerieLabelLayout = new QHBoxLayout(menagerieLabelWidget);
+    menagerieLabelLayout->setContentsMargins(0, 0, 0, 0);
+    menagerieLabelLayout->setSpacing(4);
+    
+    auto *menagerieIconLabel = new QLabel(menagerieLabelWidget);
+    menagerieIconLabel->setPixmap(QIcon(":/icons/cattle-skull.svg").pixmap(18, 18));
+    
+    auto *menagerieTextLabel = new QLabel("Menagerie:", menagerieLabelWidget);
+    menagerieLabelLayout->addWidget(menagerieIconLabel);
+    menagerieLabelLayout->addWidget(menagerieTextLabel);
+    menagerieLabelLayout->addStretch();
+    
+    overlayForm->addRow(menagerieLabelWidget, m_overlayMenagerie);
+
     addPlaceholder("Delve", "/delve", false);
     addPlaceholder("Sanctum", "/sanctum", false);
     addPlaceholder("Kingsmarch", "/kingsmarch", true);
@@ -764,6 +783,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     connect(m_overlayLayout,  &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
     connect(m_overlayHideout, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_overlayGuild,   &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
+    connect(m_overlayMenagerie,&QCheckBox::toggled,      this, [this](bool) { saveAndEmit(); });
     connect(m_overlayL2P,     &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
     connect(m_defaultTab,     &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
     connect(m_startMinimized, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
@@ -1022,6 +1042,7 @@ void SettingsPage::saveAndEmit()
     m_config.overlayLayoutVertical = (m_overlayLayout->currentIndex() == 0);
     m_config.overlayShowHideout    = m_overlayHideout->isChecked();
     m_config.overlayShowGuild      = m_overlayGuild->isChecked();
+    m_config.overlayShowMenagerie  = m_overlayMenagerie->isChecked();
     m_config.overlayShowL2P        = m_overlayL2P->isChecked();
     m_config.defaultTab      = m_defaultTab->currentIndex();
     m_config.startMinimized  = m_startMinimized->isChecked();

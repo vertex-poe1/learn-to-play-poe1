@@ -26,6 +26,7 @@ public:
     void setLayoutVertical(bool vertical);
     void setHideoutVisible(bool visible);
     void setGuildVisible(bool visible);
+    void setMenagerieVisible(bool visible);
     void setL2PVisible(bool visible);
     void setGameHwnd(quint64 hwnd);
 
@@ -41,6 +42,7 @@ private:
     QWidget *m_infoPanel{};
     QWidget *m_hideoutIcon{};
     QWidget *m_guildIcon{};
+    QWidget *m_menagerieIcon{};
 
 #ifdef _WIN32
     OverlayKeepalive *m_keepalive{};

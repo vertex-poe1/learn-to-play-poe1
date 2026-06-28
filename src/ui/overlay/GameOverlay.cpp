@@ -194,6 +194,9 @@ GameOverlay::GameOverlay(QWidget *parent)
     m_guildIcon = new ClickableIcon(QStringLiteral(":/icons/fleur-de-lis-shield.svg"), QStringLiteral("/guild"), QColor(15, 10, 2, 150), accentBorder, m_panelContainer);
     layout->addWidget(m_guildIcon, 0, Qt::AlignHCenter);
 
+    m_menagerieIcon = new ClickableIcon(QStringLiteral(":/icons/cattle-skull.svg"), QStringLiteral("/menagerie"), QColor(65, 30, 30, 150), QColor("#dcd0b8"), m_panelContainer);
+    layout->addWidget(m_menagerieIcon, 0, Qt::AlignHCenter);
+
     m_panelContainer->adjustSize();
 
 #ifdef _WIN32
@@ -256,6 +259,12 @@ void GameOverlay::setGuildVisible(bool visible)
     repositionPanels();
 }
 
+void GameOverlay::setMenagerieVisible(bool visible)
+{
+    m_menagerieIcon->setVisible(visible);
+    repositionPanels();
+}
+
 void GameOverlay::setL2PVisible(bool visible)
 {
     m_infoPanel->setVisible(visible);
@@ -268,6 +277,8 @@ void GameOverlay::setGameHwnd(quint64 hwnd)
         static_cast<ClickableIcon*>(m_hideoutIcon)->setGameHwnd(hwnd);
     if (m_guildIcon)
         static_cast<ClickableIcon*>(m_guildIcon)->setGameHwnd(hwnd);
+    if (m_menagerieIcon)
+        static_cast<ClickableIcon*>(m_menagerieIcon)->setGameHwnd(hwnd);
 }
 
 void GameOverlay::paintEvent(QPaintEvent *)

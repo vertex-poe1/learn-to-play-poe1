@@ -53,6 +53,7 @@ private:
     QComboBox  *m_overlayLayout{};
     QCheckBox  *m_overlayHideout{};
     QCheckBox  *m_overlayGuild{};
+    QCheckBox  *m_overlayMenagerie{};
     QCheckBox  *m_overlayL2P{};
 
     // Window page
