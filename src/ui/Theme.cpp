@@ -7,6 +7,7 @@
 #include <QPalette>
 #include <QStyleFactory>
 #include <QSvgRenderer>
+#include <QStyleHints>
 
 namespace Theme {
 
@@ -29,6 +30,9 @@ QPixmap renderSvgIcon(const QString &svgPath, const QColor &color,
 void apply(QApplication &app)
 {
     app.setStyle(new AppStyle(QStyleFactory::create("Fusion")));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+#endif
 
     QFont defaultFont = app.font();
     defaultFont.setFamilies({"Whitney", "Segoe UI"});
