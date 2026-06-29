@@ -22,11 +22,25 @@ class SettingsPage : public QWidget
 public:
     explicit SettingsPage(AppConfig &config, QWidget *parent = nullptr);
 
+    // Provide a way to build specific sub-pages when clicked
+    void buildGamePage(QWidget *parent);
+    void buildOverlayPage(QWidget *parent);
+    void buildWindowPage(QWidget *parent);
+    void buildChatPage(QWidget *parent);
+    void buildAboutPage(QWidget *parent);
+    void buildAlertsPage(QWidget *parent);
+    void buildDebugPage(QWidget *parent);
+    void buildAccountsPage(QWidget *parent);
+
 signals:
     void configChanged();
 
+protected:
+    void hideEvent(QHideEvent *event) override;
+
 private:
     void navigateTo(int pageIndex, const QString &title);
+    void loadPageAsync(int pageIndex, const QString &title, const std::function<void(QWidget*)> &builder);
     void navigateBack();
     void saveAndEmit();
 
@@ -42,6 +56,10 @@ private:
     QPushButton    *m_backBtn{};
     QLabel         *m_titleLabel{};
     QPushButton    *m_debugCategoryBtn{};
+
+    int     m_targetPageIndex = 0;
+    QWidget *m_loadingPage{};
+    bool    m_pageLoaded[9]{}; // track which index has been built
 
     // Game page
     QCheckBox  *m_autoDetect{};

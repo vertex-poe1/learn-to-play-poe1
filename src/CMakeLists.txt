@@ -23,6 +23,8 @@ qt_add_executable(l2p-poe1
     core/PaintProbeFilter.h
     core/PerfProbe.cpp
     core/PerfProbe.h
+    core/DeferredTaskQueue.cpp
+    core/DeferredTaskQueue.h
     db/Database.cpp
     db/Database.h
     db/DatabaseHealth.cpp
