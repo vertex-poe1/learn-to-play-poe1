@@ -194,7 +194,9 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_WIN
     // Force Windows QPA to use a dark background brush and dark immersive titlebars,
     // eliminating the white flash on startup.
-    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+    // Skip this in CI environments because the undocumented APIs used by darkmode=2
+    // can crash headless Windows Server sessions.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && qEnvironmentVariableIsEmpty("CI")) {
         qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
     }
 #endif
