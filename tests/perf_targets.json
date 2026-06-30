@@ -1,762 +1,202 @@
 {
   "startup_to_session_list_ms": {
-    "threshold_ms": 5000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_load_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_load_delta_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "guide_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "guide_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_load_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_load_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "chats_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "chats_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_load_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_load_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "dms_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "dms_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_load_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_load_delta_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "stash_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "stash_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_load_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_load_delta_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 11000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "profile_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "profile_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_load_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_load_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "current_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "current_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_load_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_load_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_first_load_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_final_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_final_paint_delta_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_final_paint_from_paint_ms": {
-    "threshold_ms": 13000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_final_interaction_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_final_interaction_delta_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_final_interaction_from_paint_ms": {
-    "threshold_ms": 14000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_menu_swap_final_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_menu_swap_final_delta_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "log_baseline_menu_swap_final_from_paint_ms": {
-    "threshold_ms": 15000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_first_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_first_paint_delta_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_first_paint_from_paint_ms": {
-    "threshold_ms": 8000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_first_interaction_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_first_interaction_delta_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_first_interaction_from_paint_ms": {
-    "threshold_ms": 10000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_menu_swap_early_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_menu_swap_early_delta_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  },
-  "log_swap_early_menu_swap_early_from_paint_ms": {
-    "threshold_ms": 12000,
-    "max_regression_ms": 1000
-  }
+    "threshold_ms": 3000,
+    "max_regression_ms": 500
+  },
+
+  "guide_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "guide_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "guide_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "guide_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "guide_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "guide_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "guide_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "guide_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "guide_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "guide_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "guide_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "guide_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "guide_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "guide_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "guide_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "guide_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "guide_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "guide_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+
+  "chats_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "chats_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "chats_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "chats_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "chats_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "chats_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "chats_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "chats_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "chats_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "chats_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "chats_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "chats_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "chats_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "chats_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "chats_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "chats_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "chats_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "chats_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+
+  "dms_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "dms_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "dms_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "dms_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "dms_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "dms_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "dms_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "dms_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "dms_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "dms_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "dms_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "dms_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "dms_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "dms_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "dms_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "dms_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "dms_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "dms_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+
+  "stash_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "stash_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "stash_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "stash_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "stash_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "stash_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "stash_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "stash_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "stash_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "stash_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "stash_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "stash_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "stash_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "stash_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "stash_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "stash_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "stash_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "stash_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+
+  "profile_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "profile_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "profile_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "profile_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "profile_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "profile_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "profile_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "profile_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "profile_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "profile_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "profile_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "profile_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "profile_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "profile_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "profile_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "profile_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "profile_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "profile_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+
+  "current_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "current_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "current_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "current_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "current_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "current_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "current_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "current_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "current_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "current_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "current_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "current_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "current_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "current_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "current_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "current_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "current_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "current_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+
+  "log_baseline_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_baseline_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_baseline_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "log_baseline_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "log_baseline_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "log_baseline_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "log_baseline_first_load_ms":                   { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "log_baseline_first_load_delta_ms":             { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_baseline_first_load_from_paint_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_baseline_final_paint_ms":                  { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "log_baseline_final_paint_delta_ms":            { "threshold_ms": 1000, "max_regression_ms": 500 },
+  "log_baseline_final_paint_from_paint_ms":       { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_baseline_final_interaction_ms":            { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "log_baseline_final_interaction_delta_ms":      { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "log_baseline_final_interaction_from_paint_ms": { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_baseline_menu_swap_final_ms":              { "threshold_ms": 3500, "max_regression_ms": 500 },
+  "log_baseline_menu_swap_final_delta_ms":        { "threshold_ms": 300,  "max_regression_ms": 200 },
+  "log_baseline_menu_swap_final_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_swap_early_first_paint_ms":                  { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_swap_early_first_paint_delta_ms":            { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_swap_early_first_paint_from_paint_ms":       { "threshold_ms": 50,   "max_regression_ms": 50  },
+  "log_swap_early_first_interaction_ms":            { "threshold_ms": 2500, "max_regression_ms": 500 },
+  "log_swap_early_first_interaction_delta_ms":      { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "log_swap_early_first_interaction_from_paint_ms": { "threshold_ms": 200,  "max_regression_ms": 200 },
+  "log_swap_early_menu_swap_early_ms":              { "threshold_ms": 3000, "max_regression_ms": 500 },
+  "log_swap_early_menu_swap_early_delta_ms":        { "threshold_ms": 2000, "max_regression_ms": 500 },
+  "log_swap_early_menu_swap_early_from_paint_ms":   { "threshold_ms": 2000, "max_regression_ms": 500 }
 }

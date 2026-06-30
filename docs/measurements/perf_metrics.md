@@ -20,7 +20,7 @@ Test DB: 120 closed sessions, no open session.
 `final_interaction` = user click on swap tab registered.  
 `menu_swap_*` = swap tab page rendered.
 
-### Baseline scenario (default tab â†’ swap tab after data loads)
+### Baseline scenario (default tab → swap tab after data loads)
 
 | Tab | first_paint | first_interaction | first_load | final_paint | final_interaction | menu_swap_final |
 |---|---|---|---|---|---|---|
@@ -46,12 +46,12 @@ Test DB: 120 closed sessions, no open session.
 
 ## Notes
 
-- `current` (SessionViewPage) `first_load` â‰ˆ `final_paint` because SessionViewPage has no
+- `current` (SessionViewPage) `first_load` ≈ `final_paint` because SessionViewPage has no
   running session in the test DB; the data load is instantaneous and `final_paint` is
   recorded immediately after `first_load` (no paint-event round-trip needed).
 - `log` has the highest `first_interaction` and `first_load` due to loading 120 sessions
   from the test DB. Real-world counts are usually lower for a single league.
-- Placeholder tabs (guide, stash, profile) have ~3 ms between `first_load` and `final_paint` because there is no async data fetch â€” the load is a no-op.
+- Placeholder tabs (guide, stash, profile) have ~3 ms between `first_load` and `final_paint` because there is no async data fetch — the load is a no-op.
 
 ## Reference Implementations
 

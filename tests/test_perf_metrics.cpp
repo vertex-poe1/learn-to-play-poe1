@@ -427,7 +427,8 @@ void PerfMetricsTest::perfSuite()
         const QString &key = it.key();
         QJsonObject targetObj = targetsJson[key].toObject();
         if (targetObj.isEmpty()) {
-            // Unconfigured milestone target; could warn, but skipping allows dynamic tracking of info-only metrics
+            qWarning("Perf target not configured for metric: %s (median %lld ms) -- add it to perf_targets.json",
+                     qPrintable(key), median);
             continue;
         }
 

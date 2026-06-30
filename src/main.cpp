@@ -209,8 +209,10 @@ int main(int argc, char *argv[])
     // eliminating the white flash on startup.
     // Documentation: https://doc.qt.io/qt-6/qguiapplication.html#platform-specific-arguments
     // Context: https://www.qt.io/blog/dark-mode-on-windows-11-with-qt-6.5
-    // Skip this in CI environments because the undocumented APIs used by darkmode=2
-    // can crash headless Windows Server sessions.
+    // Skip in CI: the undocumented Win32 APIs used by darkmode=2 crash headless
+    // Windows Server sessions. CI is set by GitHub Actions (our only CI runner);
+    // if we add another runner, add its equivalent flag to this guard.
+    // A dev may also set CI locally to emulate a CI environment — that is intentional.
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && qEnvironmentVariableIsEmpty("CI")) {
         qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
     }
