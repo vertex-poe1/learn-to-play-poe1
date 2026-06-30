@@ -1,5 +1,7 @@
 #include "core/DeferredTaskQueue.h"
 
+#include <QGuiApplication>
+#include <QCursor>
 DeferredTaskQueue& DeferredTaskQueue::instance()
 {
     static DeferredTaskQueue inst;
@@ -22,12 +24,14 @@ void DeferredTaskQueue::enqueue(const QString& id, int priority, std::function<v
             t.work = std::move(task);
             if (!m_timer.isActive())
                 m_timer.start();
+            updateWaitCursor();
             return;
         }
     }
     m_tasks.append({id, priority, std::move(task)});
     if (!m_timer.isActive())
         m_timer.start();
+    updateWaitCursor();
 }
 
 void DeferredTaskQueue::setPriority(const QString& id, int priority)
@@ -37,6 +41,7 @@ void DeferredTaskQueue::setPriority(const QString& id, int priority)
             t.priority = priority;
             if (!m_timer.isActive())
                 m_timer.start();
+            updateWaitCursor();
             return;
         }
     }
@@ -50,6 +55,7 @@ void DeferredTaskQueue::cancel(const QString& id)
     if (m_tasks.isEmpty()) {
         m_timer.stop();
     }
+    updateWaitCursor();
 }
 
 void DeferredTaskQueue::processNextTask()
@@ -76,5 +82,26 @@ void DeferredTaskQueue::processNextTask()
     // Execute task
     if (task.work) {
         task.work();
+    }
+    
+    updateWaitCursor();
+}
+
+void DeferredTaskQueue::updateWaitCursor()
+{
+    bool needsWaitCursor = false;
+    for (const auto& t : m_tasks) {
+        if (t.priority >= Immediate) {
+            needsWaitCursor = true;
+            break;
+        }
+    }
+
+    if (needsWaitCursor && !m_waitCursorActive) {
+        m_waitCursorActive = true;
+        QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    } else if (!needsWaitCursor && m_waitCursorActive) {
+        m_waitCursorActive = false;
+        QGuiApplication::restoreOverrideCursor();
     }
 }

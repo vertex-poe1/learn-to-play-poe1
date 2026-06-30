@@ -41,7 +41,7 @@ def main(preset: str) -> int:
 
     # Find the current test binary (built by `just build` before we were called).
     test_name = "test_startup_timing.exe" if sys.platform == "win32" else "test_startup_timing"
-    test_bin = root / "build" / preset / "src" / test_name
+    test_bin = root / "build" / preset / "tests" / test_name
     if not test_bin.exists():
         # Some presets put all binaries in src/, others use the build root.
         for candidate in prev_build.rglob(test_name):
@@ -99,7 +99,7 @@ def main(preset: str) -> int:
             return 1
 
         shutil.copy(results_path, baseline_path)
-        print(f"\n[perf-baseline-prev] Baseline saved ({prev_sha[:8]} → {baseline_path.name})")
+        print(f"\n[perf-baseline-prev] Baseline saved ({prev_sha[:8]} -> {baseline_path.name})")
 
     finally:
         print(f"\n[perf-baseline-prev] Cleaning up...")

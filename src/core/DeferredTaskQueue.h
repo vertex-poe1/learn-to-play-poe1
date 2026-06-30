@@ -37,6 +37,9 @@ private:
         std::function<void()> work;
     };
 
+    void updateWaitCursor();
+
     QList<Task> m_tasks;
     QTimer m_timer;
+    bool m_waitCursorActive = false;
 };

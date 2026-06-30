@@ -51,6 +51,7 @@ add_test(NAME test_database_sessions COMMAND test_database_sessions)
 # and emit the timing marker — both with an empty DB and a pre-populated DB.
 # Runs on every `just test` (not labeled perf) so regressions are caught early.
 qt_add_executable(test_log_startup test_log_startup.cpp)
+set_target_properties(test_log_startup PROPERTIES WIN32_EXECUTABLE FALSE)
 target_link_libraries(test_log_startup PRIVATE
     Qt6::Core Qt6::Test unofficial::sqlite3::sqlite3
 )

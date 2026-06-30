@@ -195,6 +195,16 @@ target_link_libraries(l2p-poe1 PRIVATE
     qt6keychain
 )
 
+# On Windows, copy the dynamically linked qtkeychain DLL next to the executable
+# so that tests (and the app) can run without STATUS_DLL_NOT_FOUND (0xC0000135).
+if(WIN32)
+    add_custom_command(TARGET l2p-poe1 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:qt6keychain>
+        $<TARGET_FILE_DIR:l2p-poe1>
+    )
+endif()
+
 # --- Install / deploy ---
 install(TARGETS l2p-poe1
     RUNTIME DESTINATION .

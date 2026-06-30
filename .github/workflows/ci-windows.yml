@@ -13,11 +13,18 @@ concurrency:
 jobs:
   build:
     runs-on: windows-2022
+    timeout-minutes: 10
+    env:
+      # Disables GPU rendering for QtWebEngine (Chromium).
+      # See: https://doc.qt.io/qt-6/qtwebengine-debugging.html
+      QTWEBENGINE_DISABLE_GPU: "1"
     environment: ci
 
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 2
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c # v1.13.0
@@ -49,7 +56,7 @@ jobs:
         run: cmake --build --preset ci
 
       - name: Test
-        run: ctest --preset ci --output-on-failure -LE perf
+        run: ctest --preset ci -V -LE perf
 
       - name: Restore perf baseline
         id: perf-cache

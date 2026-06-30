@@ -149,8 +149,19 @@ int main(int argc, char *argv[])
 
     if (timingMode) {
         qputenv("L2P_STARTUP_TIMING_MODE", "1");
-        fputs("STARTUP_TIMING:started\n", stdout);
-        fflush(stdout);
+        // Write the marker to a log file if L2P_STARTUP_TIMING_LOG is set,
+        // otherwise fall back to stdout. GUI subsystem exes on Windows have
+        // no stdout handle when launched as a child process, so file-based
+        // IPC is the only reliable approach for CI.
+        const QByteArray logPath = qgetenv("L2P_STARTUP_TIMING_LOG");
+        if (!logPath.isEmpty()) {
+            QFile f(QString::fromUtf8(logPath));
+            if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                f.write("STARTUP_TIMING:started\n");
+        } else {
+            fputs("STARTUP_TIMING:started\n", stdout);
+            fflush(stdout);
+        }
     }
 
     // Load config early so we can honour debug_log before MainWindow starts up,
@@ -188,12 +199,16 @@ int main(int argc, char *argv[])
     // Must be set before QApplication so QtWebEngineProcess.exe inherits the flag.
     // This removes Chromium's automation-mode markers (navigator.webdriver etc.)
     // at the engine level, which is more robust than patching them in JavaScript.
+    // Documentation: https://doc.qt.io/qt-6/qtwebengine-debugging.html
+    // Chromium flag details: https://peter.sh/experiments/chromium-command-line-switches/#disable-blink-features
     qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-blink-features=AutomationControlled");
 
     PerfProbe::instance().markDebug("main_before_app");
 #ifdef Q_OS_WIN
     // Force Windows QPA to use a dark background brush and dark immersive titlebars,
     // eliminating the white flash on startup.
+    // Documentation: https://doc.qt.io/qt-6/qguiapplication.html#platform-specific-arguments
+    // Context: https://www.qt.io/blog/dark-mode-on-windows-11-with-qt-6.5
     // Skip this in CI environments because the undocumented APIs used by darkmode=2
     // can crash headless Windows Server sessions.
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && qEnvironmentVariableIsEmpty("CI")) {

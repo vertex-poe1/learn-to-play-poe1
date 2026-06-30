@@ -38,47 +38,40 @@ private:
 
     static void assertStartup(const QString &dbPath)
     {
+        qputenv("L2P_STARTUP_TIMING_DB", dbPath.toUtf8());
+
+        // Write timing markers to a file instead of stdout.
+        // l2p-poe1.exe is a GUI subsystem app (WIN32_EXECUTABLE) and has no
+        // stdout handle when launched as a child process on Windows.
+        QTemporaryDir logDir;
+        QVERIFY(logDir.isValid());
+        const QString logPath = logDir.path() + "/timing.log";
+        qputenv("L2P_STARTUP_TIMING_LOG", logPath.toUtf8());
+
         QProcess p;
         p.setProgram(QString::fromUtf8(L2P_EXE_PATH));
         p.setArguments({"--startup-timing"});
-        QStringList env = QProcess::systemEnvironment();
-        env << "L2P_STARTUP_TIMING_DB=" + dbPath;
-        p.setEnvironment(env);
-        p.setProcessChannelMode(QProcess::MergedChannels);
+        p.setProcessChannelMode(QProcess::ForwardedChannels);
         p.start();
         QVERIFY2(p.waitForStarted(10'000), "App process failed to start");
 
-        QByteArray output;
-        bool startedMarkerSeen = false;
-        QElapsedTimer timer; timer.start();
-        while (timer.elapsed() < 30'000) {
-            output += p.readAll();
-            if (output.contains("STARTUP_TIMING:started")) {
-                startedMarkerSeen = true;
-                break;
-            }
-            if (p.state() == QProcess::NotRunning) {
-                output += p.readAll();
-                if (output.contains("STARTUP_TIMING:started"))
-                    startedMarkerSeen = true;
-                break;
-            }
-            p.waitForReadyRead(100);
-        }
-        QVERIFY2(startedMarkerSeen, 
-                 qPrintable(QString("Did not see 'started' marker. Output: %1").arg(output.left(500))));
-
-        const bool finished = p.waitForFinished(10'000);
+        // The app self-terminates after LogPage emits the populated marker.
+        const bool finished = p.waitForFinished(30'000);
         if (!finished) { p.kill(); p.waitForFinished(3'000); }
-        output += p.readAll();
-        
-        QVERIFY2(finished,
-                 qPrintable(QString("Process timed out (output: %1)").arg(output.left(500))));
+
+        QFile logFile(logPath);
+        QByteArray output;
+        if (logFile.open(QIODevice::ReadOnly))
+            output = logFile.readAll();
+
+        QVERIFY2(finished, qPrintable(QString("Process timed out. Log file contents:\n%1").arg(output.left(1000))));
         QVERIFY2(p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0,
-                 qPrintable(QString("Process exited abnormally (status %1, code %2, output: %3)")
+                 qPrintable(QString("Process exited abnormally (status %1, code %2). Log:\n%3")
                      .arg(p.exitStatus()).arg(p.exitCode()).arg(output.left(500))));
+        QVERIFY2(output.contains("STARTUP_TIMING:started"),
+                 qPrintable(QString("Missing 'started' marker. Log:\n%1").arg(output.left(1000))));
         QVERIFY2(output.contains("STARTUP_TIMING:populated"),
-                 qPrintable(QString("Marker not found in output: %1").arg(output.left(500))));
+                 qPrintable(QString("Missing 'populated' marker. Log:\n%1").arg(output.left(1000))));
     }
 };
 

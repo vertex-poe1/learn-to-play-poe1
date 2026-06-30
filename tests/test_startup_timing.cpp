@@ -49,13 +49,16 @@ void StartupTimingTest::sessionListVisible()
     constexpr int runs = 10;
 
     for (int i = 0; i < runs; ++i) {
+        // File-based IPC: l2p-poe1.exe is a GUI subsystem app with no stdout
+        // handle when launched as a child process on Windows.
+        const QString logPath = tmpDir.path() + QString("/timing_%1.log").arg(i);
+        qputenv("L2P_STARTUP_TIMING_DB", dbPath.toUtf8());
+        qputenv("L2P_STARTUP_TIMING_LOG", logPath.toUtf8());
+
         QProcess p;
         p.setProgram(exePath);
         p.setArguments({"--startup-timing"});
-        QStringList env = QProcess::systemEnvironment();
-        env << "L2P_STARTUP_TIMING_DB=" + dbPath;
-        p.setEnvironment(env);
-        p.setProcessChannelMode(QProcess::MergedChannels);
+        p.setProcessChannelMode(QProcess::ForwardedChannels);
 
         QElapsedTimer t;
         t.start();
@@ -71,16 +74,20 @@ void StartupTimingTest::sessionListVisible()
             p.waitForFinished(3'000);
         }
 
-        const QByteArray output = p.readAll();
+        QFile logFile(logPath);
+        QByteArray output;
+        if (logFile.open(QIODevice::ReadOnly))
+            output = logFile.readAll();
+
         QVERIFY2(finished,
-                 qPrintable(QString("Run %1: process timed out (output: %2)")
+                 qPrintable(QString("Run %1: process timed out (log: %2)")
                      .arg(i + 1).arg(QString::fromUtf8(output).left(500))));
         QVERIFY2(p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0,
-                 qPrintable(QString("Run %1: process exited abnormally (status %2, code %3, output: %4)")
+                 qPrintable(QString("Run %1: process exited abnormally (status %2, code %3, log: %4)")
                      .arg(i + 1).arg(p.exitStatus()).arg(p.exitCode())
                      .arg(QString::fromUtf8(output).left(500))));
         QVERIFY2(output.contains("STARTUP_TIMING:populated"),
-                 qPrintable(QString("Run %1: marker not found in output: %2")
+                 qPrintable(QString("Run %1: marker not found in log: %2")
                      .arg(i + 1).arg(QString::fromUtf8(output).left(500))));
 
         times.append(ms);

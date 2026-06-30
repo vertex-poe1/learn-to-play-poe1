@@ -1,6 +1,7 @@
 #include "ui/log/LogPage.h"
 #include "db/Database.h"
 #include <QCoreApplication>
+#include <QFile>
 #include <cstdio>
 #include "util/Docs.h"
 #include "events/LiveEvent.h"
@@ -362,8 +363,15 @@ void LogPage::applySessions(const QList<Database::SessionRecord> &sessions)
     if (!m_timingEmitted && qgetenv("L2P_STARTUP_TIMING_MODE") == "1") {
         m_timingEmitted = true;
         QTimer::singleShot(0, this, [] {
-            fputs("STARTUP_TIMING:populated\n", stdout);
-            fflush(stdout);
+            const QByteArray logPath = qgetenv("L2P_STARTUP_TIMING_LOG");
+            if (!logPath.isEmpty()) {
+                QFile f(QString::fromUtf8(logPath));
+                if (f.open(QIODevice::WriteOnly | QIODevice::Append))
+                    f.write("STARTUP_TIMING:populated\n");
+            } else {
+                fputs("STARTUP_TIMING:populated\n", stdout);
+                fflush(stdout);
+            }
             QCoreApplication::quit();
         });
     }
