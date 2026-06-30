@@ -401,20 +401,39 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     
     overlayForm->addRow("Icon layout:", layoutContainer);
 
+    auto *checkboxesWidget = new QWidget(overlayContent);
+    auto *checkboxesLayout = new QHBoxLayout(checkboxesWidget);
+    checkboxesLayout->setContentsMargins(0, 10, 0, 0);
+
+    auto *teleportWidget = new QWidget(checkboxesWidget);
+    auto *teleportForm = new QFormLayout(teleportWidget);
+    teleportForm->setContentsMargins(0, 0, 0, 0);
+
+    auto *infoWidget = new QWidget(checkboxesWidget);
+    auto *infoForm = new QFormLayout(infoWidget);
+    infoForm->setContentsMargins(0, 0, 0, 0);
+
+    checkboxesLayout->addWidget(teleportWidget);
+    checkboxesLayout->addSpacing(40);
+    checkboxesLayout->addWidget(infoWidget);
+    checkboxesLayout->addStretch();
+
+    overlayForm->addRow(checkboxesWidget);
+
     auto *teleportHeader = new QLabel("<b>Teleport Shortcuts</b>", overlayContent);
-    overlayForm->addRow(teleportHeader);
+    teleportForm->addRow(teleportHeader);
 
     m_overlayL2P = new QCheckBox(overlayContent);
     m_overlayL2P->setChecked(m_config.overlayShowL2P);
     auto *l2pLabel = new QLabel("<span style=\"color: #c8a84b; font-family: 'Palatino Linotype', 'Book Antiqua', 'Palatino', serif; font-size: 14px; font-weight: bold; font-style: italic; letter-spacing: 2px;\">l2p</span> App Focus:", overlayContent);
-    overlayForm->addRow(l2pLabel, m_overlayL2P);
+    teleportForm->addRow(l2pLabel, m_overlayL2P);
 
     m_overlayHideout = new QCheckBox(overlayContent);
     m_overlayHideout->setChecked(m_config.overlayShowHideout);
     m_overlayHideout->setToolTip("/hideout");
     auto *hideoutLabel = new QLabel("<img src=':/icons/fleur-de-lis.svg' width='18' height='18' style='vertical-align: middle;'> Hideout:", overlayContent);
     hideoutLabel->setToolTip("/hideout");
-    overlayForm->addRow(hideoutLabel, m_overlayHideout);
+    teleportForm->addRow(hideoutLabel, m_overlayHideout);
 
     const auto addPlaceholder = [&](const QString &label, const QString &cmd, bool checked) {
         auto *l = new QLabel(label + ":", overlayContent);
@@ -427,7 +446,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
         if (!cmd.isEmpty()) {
             cb->setToolTip(cmd);
         }
-        overlayForm->addRow(l, cb);
+        teleportForm->addRow(l, cb);
     };
 
     m_overlayGuild = new QCheckBox(overlayContent);
@@ -448,7 +467,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     guildLabelLayout->addWidget(guildTextLabel);
     guildLabelLayout->addStretch();
     
-    overlayForm->addRow(guildLabelWidget, m_overlayGuild);
+    teleportForm->addRow(guildLabelWidget, m_overlayGuild);
 
     m_overlayMenagerie = new QCheckBox(overlayContent);
     m_overlayMenagerie->setChecked(m_config.overlayShowMenagerie);
@@ -468,7 +487,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     menagerieLabelLayout->addWidget(menagerieTextLabel);
     menagerieLabelLayout->addStretch();
     
-    overlayForm->addRow(menagerieLabelWidget, m_overlayMenagerie);
+    teleportForm->addRow(menagerieLabelWidget, m_overlayMenagerie);
 
     m_overlayMonastery = new QCheckBox(overlayContent);
     m_overlayMonastery->setChecked(m_config.overlayShowMonastery);
@@ -488,7 +507,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     monasteryLabelLayout->addWidget(monasteryTextLabel);
     monasteryLabelLayout->addStretch();
     
-    overlayForm->addRow(monasteryLabelWidget, m_overlayMonastery);
+    teleportForm->addRow(monasteryLabelWidget, m_overlayMonastery);
 
     m_overlayHeist = new QCheckBox(overlayContent);
     m_overlayHeist->setChecked(m_config.overlayShowHeist);
@@ -504,7 +523,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     heistLabelLayout->addWidget(heistIconLabel);
     heistLabelLayout->addWidget(heistTextLabel);
     heistLabelLayout->addStretch();
-    overlayForm->addRow(heistLabelWidget, m_overlayHeist);
+    teleportForm->addRow(heistLabelWidget, m_overlayHeist);
 
     m_overlaySanctum = new QCheckBox(overlayContent);
     m_overlaySanctum->setChecked(m_config.overlayShowSanctum);
@@ -520,7 +539,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     sanctumLabelLayout->addWidget(sanctumIconLabel);
     sanctumLabelLayout->addWidget(sanctumTextLabel);
     sanctumLabelLayout->addStretch();
-    overlayForm->addRow(sanctumLabelWidget, m_overlaySanctum);
+    teleportForm->addRow(sanctumLabelWidget, m_overlaySanctum);
 
     m_overlayDelve = new QCheckBox(overlayContent);
     m_overlayDelve->setChecked(m_config.overlayShowDelve);
@@ -536,7 +555,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     delveLabelLayout->addWidget(delveIconLabel);
     delveLabelLayout->addWidget(delveTextLabel);
     delveLabelLayout->addStretch();
-    overlayForm->addRow(delveLabelWidget, m_overlayDelve);
+    teleportForm->addRow(delveLabelWidget, m_overlayDelve);
+
     m_overlayKingsmarch = new QCheckBox(overlayContent);
     m_overlayKingsmarch->setChecked(m_config.overlayShowKingsmarch);
     m_overlayKingsmarch->setToolTip("/kingsmarch");
@@ -551,11 +571,11 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     kingsmarchLabelLayout->addWidget(kingsmarchIconLabel);
     kingsmarchLabelLayout->addWidget(kingsmarchTextLabel);
     kingsmarchLabelLayout->addStretch();
-    overlayForm->addRow(kingsmarchLabelWidget, m_overlayKingsmarch);
+    teleportForm->addRow(kingsmarchLabelWidget, m_overlayKingsmarch);
 
 
-    auto *infoHeader = new QLabel("<br><b>Informational</b>", overlayContent);
-    overlayForm->addRow(infoHeader);
+    auto *infoHeader = new QLabel("<b>Informational</b>", overlayContent);
+    infoForm->addRow(infoHeader);
 
     m_overlayLadder = new QCheckBox(overlayContent);
     m_overlayLadder->setChecked(m_config.overlayShowLadder);
@@ -571,7 +591,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     ladderLabelLayout->addWidget(ladderIconLabel);
     ladderLabelLayout->addWidget(ladderTextLabel);
     ladderLabelLayout->addStretch();
-    overlayForm->addRow(ladderLabelWidget, m_overlayLadder);
+    infoForm->addRow(ladderLabelWidget, m_overlayLadder);
 
     m_overlayTimePlayed = new QCheckBox(overlayContent);
     m_overlayTimePlayed->setChecked(m_config.overlayShowTimePlayed);
@@ -587,7 +607,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     timeplayedLabelLayout->addWidget(timeplayedIconLabel);
     timeplayedLabelLayout->addWidget(timeplayedTextLabel);
     timeplayedLabelLayout->addStretch();
-    overlayForm->addRow(timeplayedLabelWidget, m_overlayTimePlayed);
+    infoForm->addRow(timeplayedLabelWidget, m_overlayTimePlayed);
+
     m_overlayCharacterAge = new QCheckBox(overlayContent);
     m_overlayCharacterAge->setChecked(m_config.overlayShowCharacterAge);
     m_overlayCharacterAge->setToolTip("/age");
@@ -602,7 +623,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     characterageLabelLayout->addWidget(characterageIconLabel);
     characterageLabelLayout->addWidget(characterageTextLabel);
     characterageLabelLayout->addStretch();
-    overlayForm->addRow(characterageLabelWidget, m_overlayCharacterAge);
+    infoForm->addRow(characterageLabelWidget, m_overlayCharacterAge);
+
     m_overlayPassives = new QCheckBox(overlayContent);
     m_overlayPassives->setChecked(m_config.overlayShowPassives);
     m_overlayPassives->setToolTip("/passives");
@@ -617,7 +639,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     passivesLabelLayout->addWidget(passivesIconLabel);
     passivesLabelLayout->addWidget(passivesTextLabel);
     passivesLabelLayout->addStretch();
-    overlayForm->addRow(passivesLabelWidget, m_overlayPassives);
+    infoForm->addRow(passivesLabelWidget, m_overlayPassives);
+
     m_overlayDeaths = new QCheckBox(overlayContent);
     m_overlayDeaths->setChecked(m_config.overlayShowDeaths);
     m_overlayDeaths->setToolTip("/deaths");
@@ -632,7 +655,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     deathsLabelLayout->addWidget(deathsIconLabel);
     deathsLabelLayout->addWidget(deathsTextLabel);
     deathsLabelLayout->addStretch();
-    overlayForm->addRow(deathsLabelWidget, m_overlayDeaths);
+    infoForm->addRow(deathsLabelWidget, m_overlayDeaths);
+
     m_overlayMonstersRemaining = new QCheckBox(overlayContent);
     m_overlayMonstersRemaining->setChecked(m_config.overlayShowMonstersRemaining);
     m_overlayMonstersRemaining->setToolTip("/remaining");
@@ -647,7 +671,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     monstersremainingLabelLayout->addWidget(monstersremainingIconLabel);
     monstersremainingLabelLayout->addWidget(monstersremainingTextLabel);
     monstersremainingLabelLayout->addStretch();
-    overlayForm->addRow(monstersremainingLabelWidget, m_overlayMonstersRemaining);
+    infoForm->addRow(monstersremainingLabelWidget, m_overlayMonstersRemaining);
+
     m_overlayAtlasPassives = new QCheckBox(overlayContent);
     m_overlayAtlasPassives->setChecked(m_config.overlayShowAtlasPassives);
     m_overlayAtlasPassives->setToolTip("/atlaspassives");
@@ -662,7 +687,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     atlaspassivesLabelLayout->addWidget(atlaspassivesIconLabel);
     atlaspassivesLabelLayout->addWidget(atlaspassivesTextLabel);
     atlaspassivesLabelLayout->addStretch();
-    overlayForm->addRow(atlaspassivesLabelWidget, m_overlayAtlasPassives);
+    infoForm->addRow(atlaspassivesLabelWidget, m_overlayAtlasPassives);
+
     m_overlayKills = new QCheckBox(overlayContent);
     m_overlayKills->setChecked(m_config.overlayShowKills);
     m_overlayKills->setToolTip("/kills");
@@ -677,7 +703,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     killsLabelLayout->addWidget(killsIconLabel);
     killsLabelLayout->addWidget(killsTextLabel);
     killsLabelLayout->addStretch();
-    overlayForm->addRow(killsLabelWidget, m_overlayKills);
+    infoForm->addRow(killsLabelWidget, m_overlayKills);
+
     m_overlayResetXP = new QCheckBox(overlayContent);
     m_overlayResetXP->setChecked(m_config.overlayShowResetXP);
     m_overlayResetXP->setToolTip("/reset_xp");
@@ -692,7 +719,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     resetxpLabelLayout->addWidget(resetxpIconLabel);
     resetxpLabelLayout->addWidget(resetxpTextLabel);
     resetxpLabelLayout->addStretch();
-    overlayForm->addRow(resetxpLabelWidget, m_overlayResetXP);
+    infoForm->addRow(resetxpLabelWidget, m_overlayResetXP);
+
     m_overlayReloadItemFilter = new QCheckBox(overlayContent);
     m_overlayReloadItemFilter->setChecked(m_config.overlayShowReloadItemFilter);
     m_overlayReloadItemFilter->setToolTip("/reloaditemfilter");
@@ -707,7 +735,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     reloaditemfilterLabelLayout->addWidget(reloaditemfilterIconLabel);
     reloaditemfilterLabelLayout->addWidget(reloaditemfilterTextLabel);
     reloaditemfilterLabelLayout->addStretch();
-    overlayForm->addRow(reloaditemfilterLabelWidget, m_overlayReloadItemFilter);
+    infoForm->addRow(reloaditemfilterLabelWidget, m_overlayReloadItemFilter);
 
     parentLayout->addWidget(overlayContent);
     connect(m_enableOverlay,  &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
