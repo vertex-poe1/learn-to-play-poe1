@@ -12,29 +12,47 @@ default:
 configure preset=default_preset:
     cmake --preset {{preset}}
 
-# Build (configures first if needed)
+# ── GUI (C++/Qt) ─────────────────────────────────────────────────────────────
+
+# Configure + build the GUI via cmake. Note: CMakeLists.txt wires the Go
+# service in as a build dependency of l2p-poe too (it's needed alongside the
+# GUI binary at runtime and in ctest), so this also produces
+# build/{{preset}}/src/poe-info-service(.exe) as a side effect.
 [windows]
-build preset=default_preset:
+gui-build preset=default_preset:
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"; \
     $vs = & $vswhere -latest -property installationPath; \
     $vcvars = "$vs\VC\Auxiliary\Build\vcvarsall.bat"; \
     cmd /c "`"$vcvars`" x64 >NUL 2>&1 && cmake --preset {{preset}} && cmake --build --preset {{preset}}"; \
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; \
-    Remove-Item -Path "bin/l2p-poe.exe" -ErrorAction SilentlyContinue; \
-    New-Item -ItemType Directory -Force -Path "bin" | Out-Null; \
-    Copy-Item -Path "build/{{preset}}/src/l2p-poe.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
-    Copy-Item -Path "build/{{preset}}/src/poe-info-service.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
-    Copy-Item -Path "build/{{preset}}/src/*.dll" -Destination "bin/" -Force -ErrorAction SilentlyContinue
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [unix]
-build preset=default_preset:
+gui-build preset=default_preset:
     cmake --preset {{preset}}
     cmake --build --preset {{preset}}
 
-# Run tests (builds first), excluding perf tests. Includes poe-info-service's
-# Go tests since it now owns Client.txt ingestion and schema/migration.
-test preset=default_preset: (build preset) (service-test)
+# Run the GUI's ctest suite (builds first), excluding perf tests
+gui-test preset=default_preset: (gui-build preset)
     ctest --preset {{preset}} --output-on-failure -LE perf
+
+# ── Combined ─────────────────────────────────────────────────────────────────
+
+# Build both the GUI (gui-build) and the service (service-build), then stage
+# both binaries in bin/
+[windows]
+build preset=default_preset: (gui-build preset) (service-build)
+    Remove-Item -Path "bin/l2p-poe.exe" -ErrorAction SilentlyContinue; \
+    New-Item -ItemType Directory -Force -Path "bin" | Out-Null; \
+    Copy-Item -Path "build/{{preset}}/src/l2p-poe.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
+    Copy-Item -Path "build/{{preset}}/src/*.dll" -Destination "bin/" -Force -ErrorAction SilentlyContinue
+
+[unix]
+build preset=default_preset: (gui-build preset) (service-build)
+    mkdir -p bin
+    cp build/{{preset}}/src/l2p-poe bin/
+
+# Run tests for both the GUI (gui-test/ctest) and the service (service-test/go test)
+test preset=default_preset: (gui-test preset) (service-test)
 
 # Build HEAD~1's app in an isolated worktree and record it as the perf baseline.
 # Called automatically by test-perf when no baseline exists.
@@ -88,17 +106,21 @@ test-ref-data preset=default_preset: (build preset)
 # Configure + build + test in one shot
 all preset=default_preset: (test preset)
 
-# Build and run the app
+# Build and run the app (fails hard if either binary is missing from bin/)
 [windows]
 run preset=default_preset: (build preset)
+    New-Item -ItemType Directory -Force -Path "bin" | Out-Null; \
     Copy-Item -Path "build/{{preset}}/src/l2p-poe.exe" -Destination "bin/" -Force -ErrorAction Stop; \
-    Copy-Item -Path "build/{{preset}}/src/poe-info-service.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
+    Copy-Item -Path "build/{{preset}}/src/poe-info-service.exe" -Destination "bin/" -Force -ErrorAction Stop; \
     Copy-Item -Path "build/{{preset}}/src/*.dll" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
     bin/l2p-poe.exe
 
 [unix]
 run preset=default_preset: (build preset)
-    build/{{preset}}/src/l2p-poe
+    mkdir -p bin
+    cp build/{{preset}}/src/l2p-poe bin/
+    cp build/{{preset}}/src/poe-info-service bin/
+    bin/l2p-poe
 
 # Install to dist/ and run windeployqt / macdeployqt via cmake --install
 package preset=default_preset: (build preset)

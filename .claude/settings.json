@@ -96,7 +96,10 @@
       "Bash(gofmt -w *)",
       "Bash(gofmt -l *)",
       "Bash(gofmt -d *)",
-      "Bash(just clean *)"
+      "Bash(just clean *)",
+      "Bash(gh run *)",
+      "Bash(git -C * log --oneline -p --follow -- *)",
+      "Bash(just --list)"
     ]
   }
 }
