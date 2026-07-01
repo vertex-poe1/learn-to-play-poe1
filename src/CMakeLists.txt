@@ -139,10 +139,17 @@ qt_add_resources(l2p-poe "brandsvg"
 # and the runtime loader (ServiceManager looks for it next to l2p-poe.exe).
 find_program(GO_EXECUTABLE go)
 if(GO_EXECUTABLE)
+    # Use l2p-poe's own output dir (not CMAKE_CURRENT_BINARY_DIR) so this still
+    # lands next to l2p-poe.exe when CMAKE_RUNTIME_OUTPUT_DIRECTORY is
+    # overridden (e.g. windows-msvc preset, dev/perf_baseline_prev.py).
+    get_target_property(_l2p_poe_bin_dir l2p-poe RUNTIME_OUTPUT_DIRECTORY)
+    if(NOT _l2p_poe_bin_dir)
+        set(_l2p_poe_bin_dir "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
     if(WIN32)
-        set(_service_out "${CMAKE_CURRENT_BINARY_DIR}/poe-info-service.exe")
+        set(_service_out "${_l2p_poe_bin_dir}/poe-info-service.exe")
     else()
-        set(_service_out "${CMAKE_CURRENT_BINARY_DIR}/poe-info-service")
+        set(_service_out "${_l2p_poe_bin_dir}/poe-info-service")
     endif()
     file(GLOB_RECURSE _go_sources
         "${CMAKE_SOURCE_DIR}/poe-info-service/*.go"

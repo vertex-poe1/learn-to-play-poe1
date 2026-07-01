@@ -99,7 +99,9 @@
       "Bash(just clean *)",
       "Bash(gh run *)",
       "Bash(git -C * log --oneline -p --follow -- *)",
-      "Bash(just --list)"
+      "Bash(just --list)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)"
     ]
   }
 }
