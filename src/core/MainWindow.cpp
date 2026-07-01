@@ -298,7 +298,7 @@ MainWindow::MainWindow(QWidget *parent)
     PerfProbe::instance().markDebug("mainwindow_before_gameoverlay_new");
 
     m_overlay = nullptr;
-    QTimer::singleShot(0, this, [this]() {
+    if (!timingMode && !PerfProbe::instance().enabled()) QTimer::singleShot(0, this, [this]() {
         m_overlay = new GameOverlay(this);
         PerfProbe::instance().markDebug("mainwindow_after_gameoverlay");
         m_overlay->setLayoutGrid(m_config.overlayColumns, m_config.overlayRows);
@@ -489,8 +489,6 @@ void MainWindow::onDatabaseReady()
             scheduleLogIngestion();
         }
         m_queryService = new QueryService(m_db->path(), this);
-        m_sessionViewPage->setQueryService(m_queryService);
-        m_logPage->setQueryService(m_queryService);
         m_chatPage->setQueryService(m_queryService);
         m_chatPage->setShowGuildTags(m_config.showGuildTags);
         m_dmPage->setQueryService(m_queryService);
@@ -504,6 +502,8 @@ void MainWindow::onDatabaseReady()
         m_poeInfoClient = new PoeInfoClient(m_serviceManager->host(), m_serviceManager->port(), this);
         m_chatPage->setPoeInfoClient(m_poeInfoClient);
         m_dmPage->setPoeInfoClient(m_poeInfoClient);
+        m_logPage->setPoeInfoClient(m_poeInfoClient);
+        m_sessionViewPage->setPoeInfoClient(m_poeInfoClient);
 
         // Schedule initial preloads for the current page, and background-create
         // the settings page so its landing screen is instant on first click.

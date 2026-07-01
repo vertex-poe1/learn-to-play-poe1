@@ -36,6 +36,14 @@ private:
         return db;
     }
 
+    static QByteArray readFile(const QString &path)
+    {
+        QFile f(path);
+        if (f.open(QIODevice::ReadOnly))
+            return f.readAll();
+        return QByteArray();
+    }
+
     static void assertStartup(const QString &dbPath)
     {
         qputenv("L2P_STARTUP_TIMING_DB", dbPath.toUtf8());
@@ -45,8 +53,14 @@ private:
         // stdout handle when launched as a child process on Windows.
         QTemporaryDir logDir;
         QVERIFY(logDir.isValid());
-        const QString logPath = logDir.path() + "/timing.log";
+        const QString logPath    = logDir.path() + "/timing.log";
+        const QString svcLogPath = logDir.path() + "/service.log";
         qputenv("L2P_STARTUP_TIMING_LOG", logPath.toUtf8());
+        qputenv("L2P_SERVICE_LOG",        svcLogPath.toUtf8());
+
+        fprintf(stderr, "[test_log_startup] starting app: db=%s\n",
+                dbPath.toUtf8().constData());
+        fflush(stderr);
 
         QProcess p;
         p.setProgram(QString::fromUtf8(L2P_EXE_PATH));
@@ -59,24 +73,33 @@ private:
         const bool finished = p.waitForFinished(30'000);
         if (!finished) { p.kill(); p.waitForFinished(3'000); }
 
-        QFile logFile(logPath);
-        QByteArray output;
-        if (logFile.open(QIODevice::ReadOnly))
-            output = logFile.readAll();
+        const QByteArray appLog = readFile(logPath);
+        const QByteArray svcLog = readFile(svcLogPath);
 
-        QVERIFY2(finished, qPrintable(QString("Process timed out. Log file contents:\n%1").arg(output.left(1000))));
+        auto diag = [&](const char *label) {
+            return qPrintable(QString("%1\n--- timing log ---\n%2\n--- service log ---\n%3")
+                .arg(label)
+                .arg(QString::fromUtf8(appLog.left(2000)))
+                .arg(QString::fromUtf8(svcLog.left(2000))));
+        };
+
+        QVERIFY2(finished, diag("Process timed out."));
         QVERIFY2(p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0,
-                 qPrintable(QString("Process exited abnormally (status %1, code %2). Log:\n%3")
-                     .arg(p.exitStatus()).arg(p.exitCode()).arg(output.left(500))));
-        QVERIFY2(output.contains("STARTUP_TIMING:started"),
-                 qPrintable(QString("Missing 'started' marker. Log:\n%1").arg(output.left(1000))));
-        QVERIFY2(output.contains("STARTUP_TIMING:populated"),
-                 qPrintable(QString("Missing 'populated' marker. Log:\n%1").arg(output.left(1000))));
+                 diag(qPrintable(QString("Process exited abnormally (status %1, code %2).")
+                     .arg(p.exitStatus()).arg(p.exitCode()))));
+        QVERIFY2(appLog.contains("STARTUP_TIMING:started"),
+                 diag("Missing 'started' marker."));
+        QVERIFY2(appLog.contains("STARTUP_TIMING:populated"),
+                 diag("Missing 'populated' marker."));
+
+        fprintf(stderr, "[test_log_startup] passed (exit %d)\n", p.exitCode());
+        fflush(stderr);
     }
 };
 
 void LogStartupTest::emptyDatabaseStartup()
 {
+    fprintf(stderr, "[test_log_startup] emptyDatabaseStartup\n"); fflush(stderr);
     QTemporaryDir tmp;
     QVERIFY(tmp.isValid());
     // Pass a path to a nonexistent file: app creates the DB from scratch (clean-install path).
@@ -85,6 +108,7 @@ void LogStartupTest::emptyDatabaseStartup()
 
 void LogStartupTest::populatedDatabaseStartup()
 {
+    fprintf(stderr, "[test_log_startup] populatedDatabaseStartup\n"); fflush(stderr);
     QTemporaryDir tmp;
     QVERIFY(tmp.isValid());
     const QString dbPath = tmp.path() + "/timing.db";

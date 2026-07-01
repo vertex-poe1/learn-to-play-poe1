@@ -5,9 +5,12 @@
 #include "util/Docs.h"
 #include "events/LiveEvent.h"
 #include "events/LiveEventBus.h"
-#include "db/QueryService.h"
+#include "services/PoeInfoClient.h"
 #include "ui/widgets/ScrollJumpButton.h"
 #include "ui/Theme.h"
+
+#include <QJsonArray>
+#include <QJsonObject>
 
 #include <QDateTime>
 #include <QDebug>
@@ -194,24 +197,29 @@ QWidget *SessionViewPage::scrollViewport() const
   return m_scroll->viewport();
 }
 
-void SessionViewPage::setQueryService(QueryService *qs)
+void SessionViewPage::setPoeInfoClient(PoeInfoClient *client)
 {
-  m_queryService = qs;
+  m_poeInfoClient = client;
+  connect(client, &PoeInfoClient::connected, this, [this] {
+    if (isVisible()) rebuildDbZones();
+    else m_dirty = true;
+  });
   m_dirty = true;
   triggerLoadIfNeeded();
 }
 
 void SessionViewPage::triggerLoadIfNeeded()
 {
-  if (m_dirty && m_queryService && isVisible()) {
-    // Show loading overlay immediately so first paint is instant; defer the
-    // SQL query to the next event-loop tick so paint goes through first.
+  if (m_dirty && m_poeInfoClient && isVisible()) {
     m_loadingOverlay->setGeometry(m_scroll->geometry());
     m_loadingOverlay->show();
     m_loadingOverlay->raise();
-    QTimer::singleShot(0, this, [this] {
-      if (m_dirty && m_queryService) rebuildDbZones();
-    });
+    if (m_poeInfoClient->isConnected()) {
+      QTimer::singleShot(0, this, [this] {
+        if (m_dirty && m_poeInfoClient && m_poeInfoClient->isConnected()) rebuildDbZones();
+      });
+    }
+    // If not connected: overlay stays; rebuildDbZones fires on connected() signal.
   }
 }
 
@@ -224,26 +232,26 @@ void SessionViewPage::showEvent(QShowEvent *e)
 void SessionViewPage::markDirty()
 {
   m_dirty = true;
-  if (isVisible() && m_queryService)
+  if (isVisible() && m_poeInfoClient && m_poeInfoClient->isConnected())
     rebuildDbZones();
 }
 
 void SessionViewPage::preload()
 {
-  if (!m_dirty || !m_queryService || m_rebuildInFlight) return;
+  if (!m_dirty || !m_poeInfoClient || !m_poeInfoClient->isConnected() || m_rebuildInFlight) return;
   QTimer::singleShot(0, this, [this] {
-    if (m_dirty && m_queryService && !isVisible()) rebuildDbZones();
+    if (m_dirty && m_poeInfoClient && m_poeInfoClient->isConnected() && !isVisible()) rebuildDbZones();
   });
 }
 
 void SessionViewPage::preloadSession(qint64 sessionId, const QString &startedAt)
 {
-  if (isVisible() || !m_queryService) return;
+  if (isVisible() || !m_poeInfoClient || !m_poeInfoClient->isConnected()) return;
   if (sessionId == m_targetSessionId && !m_dirty) return;
   m_targetSessionId = sessionId;
   m_dirty = true;
   QTimer::singleShot(0, this, [this] {
-    if (m_dirty && m_queryService && !isVisible()) rebuildDbZones();
+    if (m_dirty && m_poeInfoClient && m_poeInfoClient->isConnected() && !isVisible()) rebuildDbZones();
   });
   Q_UNUSED(startedAt)
 }
@@ -269,7 +277,7 @@ void SessionViewPage::viewSession(qint64 sessionId, const QString &startedAt)
     m_dirty = true;
   }
 
-  if (isVisible() && m_queryService && m_dirty)
+  if (isVisible() && m_poeInfoClient && m_poeInfoClient->isConnected() && m_dirty)
     rebuildDbZones();
 }
 
@@ -299,7 +307,7 @@ void SessionViewPage::setRunningGames(const QList<WindowState> &games)
 
   m_runningGames = games;
   m_dirty = true;
-  if (isVisible() && m_queryService)
+  if (isVisible() && m_poeInfoClient && m_poeInfoClient->isConnected())
     rebuildDbZones();
 }
 
@@ -346,7 +354,7 @@ void SessionViewPage::onLiveEvent(const LiveEvent &event, bool bulk)
   {
     m_prevZoneCard = nullptr;
     m_dirty = true;
-    if (isVisible() && m_queryService)
+    if (isVisible() && m_poeInfoClient && m_poeInfoClient->isConnected())
       rebuildDbZones();
     return;
   }
@@ -359,22 +367,29 @@ void SessionViewPage::onLiveEvent(const LiveEvent &event, bool bulk)
     const QString areaSubtype = event.data.value("area_subtype").toString();
     const int areaLevel = event.data.value("area_level").toInt();
 
-    if (m_prevZoneCard && m_queryService)
+    if (m_prevZoneCard && m_poeInfoClient && m_poeInfoClient->isConnected())
     {
       QPointer<NotificationWidget> prevCard = m_prevZoneCard;
-      m_queryService->fetchZoneTransitions(2, 0,
-                                           [prevCard](QList<Database::ZoneTransitionRecord> zones)
-                                           {
-                                             if (!prevCard) return;
-                                             if (zones.size() >= 2 && zones[1].durationSecs > 0)
-                                             {
-                                               const QString dur = "\xc2\xb7 " + formatDuration(zones[1].durationSecs);
-                                               if (zones[1].areaType.isEmpty())
-                                                 prevCard->setHeaderSuffix(dur);
-                                               else
-                                                 prevCard->setHeaderSuffix("entered " + dur);
-                                             }
-                                           });
+      QJsonObject zp;
+      zp["session_id"] = qint64(-1);
+      zp["limit"]      = 2;
+      zp["offset"]     = 0;
+      m_poeInfoClient->request("log.zones", zp,
+        [prevCard](QJsonObject payload, QString error) {
+          if (!prevCard || !error.isEmpty()) return;
+          const QJsonArray arr = payload["zones"].toArray();
+          if (arr.size() >= 2) {
+            const QJsonObject o = arr[1].toObject();
+            const int dur = o["duration_secs"].toInt(-1);
+            if (dur > 0) {
+              const QString durationStr = "\xc2\xb7 " + formatDuration(dur);
+              if (o["area_type"].toString().isEmpty())
+                prevCard->setHeaderSuffix(durationStr);
+              else
+                prevCard->setHeaderSuffix("entered " + durationStr);
+            }
+          }
+        });
     }
 
     const QString ts = QDateTime::currentDateTime().toString("HH:mm");
@@ -400,7 +415,7 @@ void SessionViewPage::onLiveEvent(const LiveEvent &event, bool bulk)
   else if (event.type == LiveEventType::SessionStart)
   {
     m_dirty = true;
-    if (isVisible() && m_queryService)
+    if (isVisible() && m_poeInfoClient && m_poeInfoClient->isConnected())
       rebuildDbZones();
   }
   else if (event.type == LiveEventType::AltTabOut)
@@ -424,7 +439,7 @@ void SessionViewPage::onLiveEvent(const LiveEvent &event, bool bulk)
 
 void SessionViewPage::rebuildDbZones()
 {
-  if (!m_queryService)
+  if (!m_poeInfoClient || !m_poeInfoClient->isConnected())
     return;
   if (m_rebuildInFlight)
   {
@@ -438,41 +453,103 @@ void SessionViewPage::rebuildDbZones()
   const int prevMax = sb->maximum();
   const int distFromBottom = prevMax > 0 ? (prevMax - sb->value()) : -1;
 
-  if (m_targetSessionId >= 0)
-  {
-    // Historical session: fetch by session ID, no running-games context.
-    const qint64 targetId = m_targetSessionId;
-    m_queryService->fetchSessionPageData(targetId, kDbZoneLimit,
-        [this, distFromBottom](QueryService::CurrentPageData data)
-        {
-          m_rebuildInFlight = false;
-          applyCurrentPageData(data, {}, {}, distFromBottom);
-          if (m_dirty) rebuildDbZones();
-        });
-  }
-  else
-  {
-    // Live session: existing behavior.
-    const QList<WindowState> runningGames = m_runningGames;
-    const QMap<quint32, QString> detectedAt = m_detectedAt;
+  const QList<WindowState> runningGames = m_runningGames;
+  const QMap<quint32, QString> detectedAt = m_detectedAt;
 
+  QJsonObject params;
+  params["session_id"] = m_targetSessionId;
+  params["zone_limit"] = kDbZoneLimit;
+
+  if (m_targetSessionId < 0)
+  {
     const int sessionLimit = runningGames.size() == 1  ? 10
                              : runningGames.size() > 1 ? 50
                                                        : 0;
-    const int zoneLimit = runningGames.isEmpty() ? 0 : kDbZoneLimit;
-
-    m_queryService->fetchCurrentPageData(sessionLimit, zoneLimit,
-        [this, distFromBottom, runningGames, detectedAt](QueryService::CurrentPageData data)
-        {
-          m_rebuildInFlight = false;
-          applyCurrentPageData(data, runningGames, detectedAt, distFromBottom);
-          if (m_dirty)
-            rebuildDbZones();
-        });
+    params["session_event_limit"] = sessionLimit;
+    if (runningGames.isEmpty())
+      params["zone_limit"] = 0;
   }
+  else
+  {
+    params["session_event_limit"] = 0;
+  }
+
+  QPointer<SessionViewPage> self(this);
+  m_poeInfoClient->request("log.session", params,
+    [self, distFromBottom, runningGames, detectedAt](QJsonObject payload, QString error) {
+      if (!self) return;
+      self->m_rebuildInFlight = false;
+      if (!error.isEmpty()) {
+        self->m_loadingOverlay->hide();
+        self->m_dirty = true;
+        return;
+      }
+
+      PageData data;
+
+      const QJsonArray zonesArr = payload["zones"].toArray();
+      for (const QJsonValue &v : zonesArr) {
+        const QJsonObject o = v.toObject();
+        Database::ZoneTransitionRecord r;
+        r.areaName    = o["area_name"].toString();
+        r.areaCode    = o["area_code"].toString();
+        r.areaType    = o["area_type"].toString();
+        r.areaSubtype = o["area_subtype"].toString();
+        r.areaLevel   = o["area_level"].toInt(0);
+        r.enteredAt   = o["entered_at"].toString();
+        r.durationSecs = o["duration_secs"].toInt(-1);
+        data.zones.append(r);
+      }
+
+      const QJsonArray seArr = payload["session_events"].toArray();
+      for (const QJsonValue &v : seArr) {
+        const QJsonObject o = v.toObject();
+        Database::SessionEventRecord r;
+        r.eventType   = o["event_type"].toString();
+        r.occurredAt  = o["occurred_at"].toString();
+        r.charName    = o["char_name"].toString();
+        r.charClass   = o["char_class"].toString();
+        r.installPath = o["install_path"].toString();
+        r.activeSecs  = o["active_secs"].toInt(-1);
+        r.totalSecs   = o["total_secs"].toInt(-1);
+        data.sessionEvents.append(r);
+      }
+
+      const QJsonArray cseArr = payload["client_screen_events"].toArray();
+      for (const QJsonValue &v : cseArr) {
+        const QJsonObject o = v.toObject();
+        Database::ClientScreenEventRecord r;
+        r.eventType  = o["event_type"].toString();
+        r.occurredAt = o["occurred_at"].toString();
+        data.clientScreenEvents.append(r);
+      }
+
+      const QJsonArray afkArr = payload["afk_records"].toArray();
+      for (const QJsonValue &v : afkArr) {
+        const QJsonObject o = v.toObject();
+        Database::AfkRecord r;
+        r.afkOnAt     = o["afk_on_at"].toString();
+        r.afkOffAt    = o["afk_off_at"].toString();
+        r.durationSecs = o["duration_secs"].toInt(-1);
+        data.afkRecords.append(r);
+      }
+
+      const QJsonArray atArr = payload["alt_tab_records"].toArray();
+      for (const QJsonValue &v : atArr) {
+        const QJsonObject o = v.toObject();
+        Database::AltTabRecord r;
+        r.outAt       = o["out_at"].toString();
+        r.inAt        = o["in_at"].toString();
+        r.durationSecs = o["duration_secs"].toInt(-1);
+        data.altTabRecords.append(r);
+      }
+
+      self->applyCurrentPageData(data, runningGames, detectedAt, distFromBottom);
+      if (self->m_dirty) self->rebuildDbZones();
+    });
 }
 
-void SessionViewPage::applyCurrentPageData(const QueryService::CurrentPageData &data,
+void SessionViewPage::applyCurrentPageData(const PageData &data,
                                        const QList<WindowState> &runningGames,
                                        const QMap<quint32, QString> &detectedAt,
                                        int distFromBottom)
@@ -794,50 +871,69 @@ void SessionViewPage::applyCurrentPageData(const QueryService::CurrentPageData &
 
 void SessionViewPage::onLoadMore()
 {
-  if (!m_queryService || m_loadMoreInFlight)
+  if (!m_poeInfoClient || !m_poeInfoClient->isConnected() || m_loadMoreInFlight)
     return;
 
-  const int prevMax = m_scroll->verticalScrollBar()->maximum();
-  const int prevValue = m_scroll->verticalScrollBar()->value();
+  const int prevMax    = m_scroll->verticalScrollBar()->maximum();
+  const int prevValue  = m_scroll->verticalScrollBar()->value();
   const int fetchOffset = m_dbZoneOffset;
-  const qint64 targetId = m_targetSessionId;
 
   m_loadMoreInFlight = true;
   m_loadMoreBtn->setEnabled(false);
 
-  auto handleZones = [this, prevMax, prevValue](QList<Database::ZoneTransitionRecord> zones)
-  {
-    m_loadMoreInFlight = false;
-    m_dbZoneOffset += zones.size();
+  QJsonObject params;
+  params["session_id"] = m_targetSessionId;
+  params["limit"]      = kDbZoneLimit;
+  params["offset"]     = fetchOffset;
 
-    const int btnIdx = m_contentLayout->indexOf(m_loadMoreBtn);
-    const int basePos = m_sessionStartCard ? 2 : 1;
-    const int insertPos = btnIdx >= 0 ? btnIdx + 1 : basePos;
-    for (const auto &z : zones)
-    {
-      const QString ts = z.enteredAt.mid(11, 5);
-      auto *card = makeZoneCard(z.areaName, z.areaCode, z.areaType, z.areaSubtype,
-                                z.areaLevel, ts, z.durationSecs);
-      m_contentLayout->insertWidget(insertPos, card);
-      m_dbZoneWidgets.append(card);
-    }
+  QPointer<SessionViewPage> self(this);
+  m_poeInfoClient->request("log.zones", params,
+    [self, prevMax, prevValue](QJsonObject payload, QString error) {
+      if (!self) return;
+      self->m_loadMoreInFlight = false;
+      if (!error.isEmpty()) {
+        self->m_loadMoreBtn->setEnabled(true);
+        return;
+      }
 
-    setLoadMoreVisible(zones.size() == kDbZoneLimit);
-    if (zones.size() == kDbZoneLimit)
-      m_loadMoreBtn->setEnabled(true);
+      QList<Database::ZoneTransitionRecord> zones;
+      const QJsonArray arr = payload["zones"].toArray();
+      for (const QJsonValue &v : arr) {
+        const QJsonObject o = v.toObject();
+        Database::ZoneTransitionRecord r;
+        r.areaName     = o["area_name"].toString();
+        r.areaCode     = o["area_code"].toString();
+        r.areaType     = o["area_type"].toString();
+        r.areaSubtype  = o["area_subtype"].toString();
+        r.areaLevel    = o["area_level"].toInt(0);
+        r.enteredAt    = o["entered_at"].toString();
+        r.durationSecs = o["duration_secs"].toInt(-1);
+        zones.append(r);
+      }
 
-    QTimer::singleShot(0, this, [this, prevMax, prevValue]()
-    {
-      const int delta = m_scroll->verticalScrollBar()->maximum() - prevMax;
-      m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+      self->m_dbZoneOffset += zones.size();
+
+      const int btnIdx   = self->m_contentLayout->indexOf(self->m_loadMoreBtn);
+      const int basePos  = self->m_sessionStartCard ? 2 : 1;
+      const int insertPos = btnIdx >= 0 ? btnIdx + 1 : basePos;
+      for (const auto &z : zones) {
+        const QString ts = z.enteredAt.mid(11, 5);
+        auto *card = self->makeZoneCard(z.areaName, z.areaCode, z.areaType, z.areaSubtype,
+                                        z.areaLevel, ts, z.durationSecs);
+        self->m_contentLayout->insertWidget(insertPos, card);
+        self->m_dbZoneWidgets.append(card);
+      }
+
+      self->setLoadMoreVisible(zones.size() == kDbZoneLimit);
+      if (zones.size() == kDbZoneLimit)
+        self->m_loadMoreBtn->setEnabled(true);
+
+      QTimer::singleShot(0, self.data(), [self, prevMax, prevValue] {
+        if (!self) return;
+        const int delta = self->m_scroll->verticalScrollBar()->maximum() - prevMax;
+        self->m_scroll->verticalScrollBar()->setValue(prevValue + delta);
+      });
     });
-  };
-
-  if (targetId >= 0)
-    m_queryService->fetchZoneTransitionsForSession(targetId, kDbZoneLimit, fetchOffset,
-                                                   std::move(handleZones));
-  else
-    m_queryService->fetchZoneTransitions(kDbZoneLimit, fetchOffset, std::move(handleZones));
 }
 
 // ---------------------------------------------------------------------------

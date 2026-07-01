@@ -30,10 +30,11 @@ type DB struct {
 	db *sql.DB
 }
 
-// Open opens the l2p SQLite database read-only. WAL mode allows concurrent
-// readers alongside the main l2p writer.
+// Open opens the l2p SQLite database read-only. WAL journal mode is inherited
+// from the writer; requesting it on a read-only connection is rejected by
+// SQLite, so the DSN omits it.
 func Open(path string) (*DB, error) {
-	dsn := path + "?mode=ro&_journal_mode=WAL&_busy_timeout=5000"
+	dsn := path + "?mode=ro&_busy_timeout=5000"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open %q: %w", path, err)
@@ -164,6 +165,343 @@ func (d *DB) FetchWhispers(playerFilter string, limit, offset int) ([]WhisperRec
 	}
 	reverseSlice(out)
 	return out, nil
+}
+
+// ── Sessions ─────────────────────────────────────────────────────────────────
+
+type SessionRecord struct {
+	ID          int64  `json:"id"`
+	StartedAt   string `json:"started_at"`
+	EndedAt     string `json:"ended_at"`
+	TotalSecs   int    `json:"total_secs"`
+	ActiveSecs  int    `json:"active_secs"`
+	AccountName string `json:"account_name"`
+	CharName    string `json:"char_name"`
+	CharClass   string `json:"char_class"`
+	InstallPath string `json:"install_path"`
+}
+
+type ZoneTransitionRecord struct {
+	AreaName     string `json:"area_name"`
+	AreaCode     string `json:"area_code"`
+	AreaType     string `json:"area_type"`
+	AreaSubtype  string `json:"area_subtype"`
+	AreaLevel    int    `json:"area_level"`
+	EnteredAt    string `json:"entered_at"`
+	DurationSecs int    `json:"duration_secs"`
+}
+
+type SessionEventRecord struct {
+	EventType   string `json:"event_type"`
+	OccurredAt  string `json:"occurred_at"`
+	CharName    string `json:"char_name"`
+	CharClass   string `json:"char_class"`
+	InstallPath string `json:"install_path"`
+	ActiveSecs  int    `json:"active_secs"`
+	TotalSecs   int    `json:"total_secs"`
+}
+
+type ClientScreenEventRecord struct {
+	EventType  string `json:"event_type"`
+	OccurredAt string `json:"occurred_at"`
+}
+
+type AfkRecord struct {
+	AfkOnAt      string `json:"afk_on_at"`
+	AfkOffAt     string `json:"afk_off_at"`
+	DurationSecs int    `json:"duration_secs"`
+}
+
+type AltTabRecord struct {
+	OutAt        string `json:"out_at"`
+	InAt         string `json:"in_at"`
+	DurationSecs int    `json:"duration_secs"`
+}
+
+type SessionPageData struct {
+	Zones              []ZoneTransitionRecord    `json:"zones"`
+	SessionEvents      []SessionEventRecord      `json:"session_events"`
+	ClientScreenEvents []ClientScreenEventRecord `json:"client_screen_events"`
+	AfkRecords         []AfkRecord               `json:"afk_records"`
+	AltTabRecords      []AltTabRecord            `json:"alt_tab_records"`
+}
+
+// FetchSessions mirrors Database::fetchSessions. Results are returned in
+// chronological order (oldest first).
+func (d *DB) FetchSessions(limit, offset int) ([]SessionRecord, error) {
+	q := `SELECT s.id, s.started_at, COALESCE(s.ended_at,''),
+	             COALESCE(s.total_secs,-1), COALESCE(s.active_secs,-1),
+	             COALESCE(a.name,''), COALESCE(c.name,''), COALESCE(cl.name,''),
+	             i.path
+	      FROM sessions s
+	      JOIN installs i        ON s.install_id = i.id
+	      LEFT JOIN accounts a   ON s.account_id = a.id
+	      LEFT JOIN characters c ON s.char_id    = c.id
+	      LEFT JOIN classes cl   ON c.class_id   = cl.id
+	      ORDER BY s.started_at DESC`
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	}
+	rows, err := d.db.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("fetchSessions: %w", err)
+	}
+	defer rows.Close()
+	var out []SessionRecord
+	for rows.Next() {
+		var r SessionRecord
+		if err := rows.Scan(&r.ID, &r.StartedAt, &r.EndedAt, &r.TotalSecs, &r.ActiveSecs,
+			&r.AccountName, &r.CharName, &r.CharClass, &r.InstallPath); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	reverseSlice(out)
+	return out, nil
+}
+
+// FetchZoneTransitions returns zone transitions for a session, newest first
+// (DESC). sessionID=-1 targets the most recent open session.
+func (d *DB) FetchZoneTransitions(sessionID int64, limit, offset int) ([]ZoneTransitionRecord, error) {
+	var q string
+	var args []any
+	if sessionID < 0 {
+		q = `SELECT COALESCE(a.display_name, a.code), a.code,
+		            COALESCE(a.type,''), COALESCE(a.subtype,''), COALESCE(a.level,0),
+		            ats.entered_at, COALESCE(ats.duration_secs,-1)
+		     FROM area_time_spans ats
+		     LEFT JOIN areas a ON ats.area_id = a.id
+		     WHERE ats.session_id = (
+		         SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+		     ) AND ats.area_id IS NOT NULL
+		     ORDER BY ats.entered_at DESC`
+	} else {
+		q = `SELECT COALESCE(a.display_name, a.code), a.code,
+		            COALESCE(a.type,''), COALESCE(a.subtype,''), COALESCE(a.level,0),
+		            ats.entered_at, COALESCE(ats.duration_secs,-1)
+		     FROM area_time_spans ats
+		     LEFT JOIN areas a ON ats.area_id = a.id
+		     WHERE ats.session_id = ? AND ats.area_id IS NOT NULL
+		     ORDER BY ats.entered_at DESC`
+		args = append(args, sessionID)
+	}
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	}
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("fetchZoneTransitions: %w", err)
+	}
+	defer rows.Close()
+	var out []ZoneTransitionRecord
+	for rows.Next() {
+		var r ZoneTransitionRecord
+		if err := rows.Scan(&r.AreaName, &r.AreaCode, &r.AreaType, &r.AreaSubtype,
+			&r.AreaLevel, &r.EnteredAt, &r.DurationSecs); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// FetchSessionEvents returns game-start/stop events in chronological order
+// (oldest first).
+func (d *DB) FetchSessionEvents(limit int) ([]SessionEventRecord, error) {
+	q := `SELECT event_type, occurred_at, char_name, char_class, install_path, active_secs, total_secs
+	      FROM (
+	          SELECT 'start' AS event_type, s.started_at AS occurred_at,
+	                 COALESCE(c.name,'') AS char_name, COALESCE(cl.name,'') AS char_class,
+	                 i.path AS install_path, COALESCE(s.active_secs,-1), COALESCE(s.total_secs,-1)
+	          FROM sessions s
+	          JOIN installs i        ON s.install_id = i.id
+	          LEFT JOIN characters c ON s.char_id    = c.id
+	          LEFT JOIN classes cl   ON c.class_id   = cl.id
+	          UNION ALL
+	          SELECT 'stop', s.ended_at, COALESCE(c.name,''), COALESCE(cl.name,''), i.path,
+	                 COALESCE(s.active_secs,-1), COALESCE(s.total_secs,-1)
+	          FROM sessions s
+	          JOIN installs i        ON s.install_id = i.id
+	          LEFT JOIN characters c ON s.char_id    = c.id
+	          LEFT JOIN classes cl   ON c.class_id   = cl.id
+	          WHERE s.ended_at IS NOT NULL
+	      )
+	      ORDER BY occurred_at DESC`
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	rows, err := d.db.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("fetchSessionEvents: %w", err)
+	}
+	defer rows.Close()
+	var out []SessionEventRecord
+	for rows.Next() {
+		var r SessionEventRecord
+		if err := rows.Scan(&r.EventType, &r.OccurredAt, &r.CharName, &r.CharClass,
+			&r.InstallPath, &r.ActiveSecs, &r.TotalSecs); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	reverseSlice(out)
+	return out, nil
+}
+
+// FetchClientScreenEvents returns client-screen events for a session, newest
+// first. sessionID=-1 targets the most recent open session.
+func (d *DB) FetchClientScreenEvents(sessionID int64) ([]ClientScreenEventRecord, error) {
+	var q string
+	var args []any
+	if sessionID < 0 {
+		q = `SELECT cse.event_type, cse.occurred_at
+		     FROM client_screen_events cse
+		     JOIN sessions s ON cse.install_id = s.install_id
+		     WHERE s.ended_at IS NULL
+		       AND s.id = (SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
+		       AND cse.occurred_at >= s.started_at
+		     ORDER BY cse.occurred_at DESC`
+	} else {
+		q = `SELECT cse.event_type, cse.occurred_at
+		     FROM client_screen_events cse
+		     JOIN sessions s ON cse.install_id = s.install_id
+		     WHERE s.id = ?
+		       AND cse.occurred_at >= s.started_at
+		       AND (s.ended_at IS NULL OR cse.occurred_at <= s.ended_at)
+		     ORDER BY cse.occurred_at DESC`
+		args = append(args, sessionID)
+	}
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("fetchClientScreenEvents: %w", err)
+	}
+	defer rows.Close()
+	var out []ClientScreenEventRecord
+	for rows.Next() {
+		var r ClientScreenEventRecord
+		if err := rows.Scan(&r.EventType, &r.OccurredAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// FetchAfkRecords returns AFK intervals for a session, newest first.
+// sessionID=-1 targets the most recent open session.
+func (d *DB) FetchAfkRecords(sessionID int64, limit int) ([]AfkRecord, error) {
+	var q string
+	var args []any
+	if sessionID < 0 {
+		q = `SELECT afk_on_at, COALESCE(afk_off_at,''),
+		            COALESCE(CAST((strftime('%s',afk_off_at)-strftime('%s',afk_on_at)) AS INTEGER),-1)
+		     FROM session_afk
+		     WHERE session_id = (SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
+		     ORDER BY afk_on_at DESC`
+	} else {
+		q = `SELECT afk_on_at, COALESCE(afk_off_at,''),
+		            COALESCE(CAST((strftime('%s',afk_off_at)-strftime('%s',afk_on_at)) AS INTEGER),-1)
+		     FROM session_afk
+		     WHERE session_id = ?
+		     ORDER BY afk_on_at DESC`
+		args = append(args, sessionID)
+	}
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("fetchAfkRecords: %w", err)
+	}
+	defer rows.Close()
+	var out []AfkRecord
+	for rows.Next() {
+		var r AfkRecord
+		if err := rows.Scan(&r.AfkOnAt, &r.AfkOffAt, &r.DurationSecs); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// FetchAltTabRecords returns alt-tab intervals for a session, newest first.
+// sessionID=-1 targets the most recent open session.
+func (d *DB) FetchAltTabRecords(sessionID int64, limit int) ([]AltTabRecord, error) {
+	var q string
+	var args []any
+	if sessionID < 0 {
+		q = `SELECT out_at, COALESCE(in_at,''),
+		            COALESCE(CAST((strftime('%s',in_at)-strftime('%s',out_at)) AS INTEGER),-1)
+		     FROM session_alt_tabs
+		     WHERE session_id = (SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
+		     ORDER BY out_at DESC`
+	} else {
+		q = `SELECT out_at, COALESCE(in_at,''),
+		            COALESCE(CAST((strftime('%s',in_at)-strftime('%s',out_at)) AS INTEGER),-1)
+		     FROM session_alt_tabs
+		     WHERE session_id = ?
+		     ORDER BY out_at DESC`
+		args = append(args, sessionID)
+	}
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("fetchAltTabRecords: %w", err)
+	}
+	defer rows.Close()
+	var out []AltTabRecord
+	for rows.Next() {
+		var r AltTabRecord
+		if err := rows.Scan(&r.OutAt, &r.InAt, &r.DurationSecs); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// FetchSessionPageData bundles all detail data for one session in a single
+// call. sessionID=-1 uses the most recent open session.
+func (d *DB) FetchSessionPageData(sessionID int64, sessionEventLimit, zoneLimit int) (SessionPageData, error) {
+	var data SessionPageData
+	var err error
+
+	if sessionID < 0 && sessionEventLimit > 0 {
+		data.SessionEvents, err = d.FetchSessionEvents(sessionEventLimit)
+		if err != nil {
+			return data, err
+		}
+	}
+
+	if zoneLimit > 0 {
+		data.Zones, err = d.FetchZoneTransitions(sessionID, zoneLimit, 0)
+		if err != nil {
+			return data, err
+		}
+		data.ClientScreenEvents, err = d.FetchClientScreenEvents(sessionID)
+		if err != nil {
+			return data, err
+		}
+		data.AfkRecords, err = d.FetchAfkRecords(sessionID, zoneLimit)
+		if err != nil {
+			return data, err
+		}
+		data.AltTabRecords, err = d.FetchAltTabRecords(sessionID, zoneLimit)
+		if err != nil {
+			return data, err
+		}
+	}
+
+	return data, nil
 }
 
 func nextDay(dateStr string) string {

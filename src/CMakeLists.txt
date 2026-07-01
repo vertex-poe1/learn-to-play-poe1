@@ -163,6 +163,32 @@ qt_add_resources(l2p-poe1 "brandsvg"
         "${CMAKE_SOURCE_DIR}/assets/vertex-industries/vertex-icon.svg"
 )
 
+# Build poe-info-service (Go) alongside the Qt app so it's available for tests
+# and the runtime loader (ServiceManager looks for it next to l2p-poe1.exe).
+find_program(GO_EXECUTABLE go)
+if(GO_EXECUTABLE)
+    if(WIN32)
+        set(_service_out "${CMAKE_CURRENT_BINARY_DIR}/poe-info-service.exe")
+    else()
+        set(_service_out "${CMAKE_CURRENT_BINARY_DIR}/poe-info-service")
+    endif()
+    file(GLOB_RECURSE _go_sources "${CMAKE_SOURCE_DIR}/poe-info-service/*.go")
+    add_custom_command(
+        OUTPUT  "${_service_out}"
+        COMMAND "${GO_EXECUTABLE}" build -o "${_service_out}" .
+        DEPENDS ${_go_sources}
+                "${CMAKE_SOURCE_DIR}/poe-info-service/go.mod"
+                "${CMAKE_SOURCE_DIR}/poe-info-service/go.sum"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/poe-info-service"
+        COMMENT "Building poe-info-service"
+        VERBATIM
+    )
+    add_custom_target(poe_info_service_bin ALL DEPENDS "${_service_out}")
+    add_dependencies(l2p-poe1 poe_info_service_bin)
+else()
+    message(WARNING "go not found — poe-info-service will not be built; tests requiring it will fail")
+endif()
+
 add_custom_target(validate_doc_urls
     COMMAND ${CMAKE_COMMAND}
         -D "SOURCE_DIR=${CMAKE_SOURCE_DIR}"

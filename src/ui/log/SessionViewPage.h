@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/widgets/NotificationWidget.h"
-#include "db/QueryService.h"
+#include "db/Database.h"
 #include "platform/WindowTracker.h"
 
 #include <QList>
@@ -10,7 +10,7 @@
 #include <QWidget>
 
 struct LiveEvent;
-class QueryService;
+class PoeInfoClient;
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -23,7 +23,7 @@ class SessionViewPage : public QWidget
 public:
     explicit SessionViewPage(QWidget *parent = nullptr);
 
-    void setQueryService(QueryService *qs);
+    void setPoeInfoClient(PoeInfoClient *client);
     void markDirty();
     void setRunningGames(const QList<WindowState> &games);
 
@@ -59,9 +59,17 @@ private slots:
     void onLoadMore();
 
 private:
+    struct PageData {
+        QList<Database::SessionEventRecord>        sessionEvents;
+        QList<Database::ZoneTransitionRecord>      zones;
+        QList<Database::ClientScreenEventRecord>   clientScreenEvents;
+        QList<Database::AfkRecord>                 afkRecords;
+        QList<Database::AltTabRecord>              altTabRecords;
+    };
+
     void triggerLoadIfNeeded();
     void rebuildDbZones();
-    void applyCurrentPageData(const QueryService::CurrentPageData &data,
+    void applyCurrentPageData(const PageData &data,
                               const QList<WindowState> &runningGames,
                               const QMap<quint32, QString> &detectedAt,
                               int distFromBottom);
@@ -82,7 +90,7 @@ private:
     QScrollArea    *m_scroll{};
     QWidget        *m_content{};
     QVBoxLayout    *m_contentLayout{};
-    QueryService   *m_queryService{};
+    PoeInfoClient  *m_poeInfoClient{};
 
     QPushButton              *m_loadMoreBtn{};
     QList<NotificationWidget *> m_dbZoneWidgets;

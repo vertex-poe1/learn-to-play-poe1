@@ -23,6 +23,7 @@ build preset=default_preset:
     Remove-Item -Path "bin/l2p-poe1.exe" -ErrorAction SilentlyContinue; \
     New-Item -ItemType Directory -Force -Path "bin" | Out-Null; \
     Copy-Item -Path "build/{{preset}}/src/l2p-poe1.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
+    Copy-Item -Path "build/{{preset}}/src/poe-info-service.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
     Copy-Item -Path "build/{{preset}}/src/*.dll" -Destination "bin/" -Force -ErrorAction SilentlyContinue
 
 [unix]
@@ -90,6 +91,7 @@ all preset=default_preset: (test preset)
 [windows]
 run preset=default_preset: (build preset)
     Copy-Item -Path "build/{{preset}}/src/l2p-poe1.exe" -Destination "bin/" -Force -ErrorAction Stop; \
+    Copy-Item -Path "build/{{preset}}/src/poe-info-service.exe" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
     Copy-Item -Path "build/{{preset}}/src/*.dll" -Destination "bin/" -Force -ErrorAction SilentlyContinue; \
     bin/l2p-poe1.exe
 

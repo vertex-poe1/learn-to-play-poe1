@@ -5,11 +5,15 @@
 #include <cstdio>
 #include "util/Docs.h"
 #include "events/LiveEvent.h"
-#include "db/QueryService.h"
 #include "events/LiveEventBus.h"
+#include "services/PoeInfoClient.h"
 #include "ui/widgets/NotificationWidget.h"
 #include "ui/widgets/ScrollJumpButton.h"
 #include "ui/Theme.h"
+
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QPointer>
 
 #include <QDate>
 #include <QLabel>
@@ -143,9 +147,22 @@ LogPage::LogPage(QWidget *parent)
     m_loadingOverlay->hide();
 }
 
-void LogPage::setQueryService(QueryService *qs)
+static void timingLog(const QByteArray &msg)
 {
-    m_queryService = qs;
+    const QByteArray logPath = qgetenv("L2P_STARTUP_TIMING_LOG");
+    if (logPath.isEmpty()) return;
+    QFile f(QString::fromUtf8(logPath));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Append))
+        f.write(msg + "\n");
+}
+
+void LogPage::setPoeInfoClient(PoeInfoClient *client)
+{
+    m_poeInfoClient = client;
+    connect(client, &PoeInfoClient::connected, this, [this] {
+        if (isVisible()) { m_limit = kInitialLimit; m_windowOffset = 0; rebuild(); }
+        else m_dirty = true;
+    });
     m_limit        = kInitialLimit;
     m_windowOffset = 0;
     m_dirty        = true;
@@ -159,21 +176,24 @@ void LogPage::markDirty()
 
 void LogPage::preload()
 {
-    if (!m_dirty || !m_queryService || m_rebuildInFlight) return;
+    if (!m_dirty || !m_poeInfoClient || !m_poeInfoClient->isConnected() || m_rebuildInFlight) return;
     QTimer::singleShot(0, this, [this] {
-        if (m_dirty && m_queryService && !isVisible()) rebuild();
+        if (m_dirty && m_poeInfoClient && m_poeInfoClient->isConnected() && !isVisible()) rebuild();
     });
 }
 
 void LogPage::triggerLoadIfNeeded()
 {
-    if (m_dirty && m_queryService && isVisible()) {
+    if (m_dirty && m_poeInfoClient && isVisible()) {
         m_loadingOverlay->setGeometry(rect());
         m_loadingOverlay->show();
         m_loadingOverlay->raise();
-        QTimer::singleShot(0, this, [this] {
-            if (m_dirty && m_queryService) rebuild();
-        });
+        if (m_poeInfoClient->isConnected()) {
+            QTimer::singleShot(0, this, [this] {
+                if (m_dirty && m_poeInfoClient && m_poeInfoClient->isConnected()) rebuild();
+            });
+        }
+        // If not connected: overlay stays; rebuild fires on connected() signal.
     }
 }
 
@@ -199,16 +219,49 @@ void LogPage::onLiveEvent(const LiveEvent &event, bool bulk)
 
 void LogPage::rebuild()
 {
-    if (!m_queryService) return;
+    if (!m_poeInfoClient || !m_poeInfoClient->isConnected()) return;
     if (m_rebuildInFlight) { m_dirty = true; return; }
     m_dirty           = false;
     m_rebuildInFlight = true;
 
-    m_queryService->fetchSessions(m_limit, m_windowOffset,
-        [this](QList<Database::SessionRecord> sessions) {
-            m_rebuildInFlight = false;
-            applySessions(sessions);
-            if (m_dirty) QTimer::singleShot(0, this, [this] { rebuild(); });
+    QJsonObject params;
+    params["limit"]  = m_limit;
+    params["offset"] = m_windowOffset;
+
+    QPointer<LogPage> self(this);
+    m_poeInfoClient->request("log.sessions", params,
+        [self](QJsonObject payload, QString error) {
+            if (!self) return;
+            self->m_rebuildInFlight = false;
+            if (!error.isEmpty()) {
+                qDebug() << "LogPage: log.sessions error:" << error;
+                timingLog("STARTUP_TIMING:error:" + error.toUtf8());
+                self->m_dirty = true;
+                QTimer::singleShot(500, self.data(), [self] {
+                    if (self && self->m_dirty && self->m_poeInfoClient
+                            && self->m_poeInfoClient->isConnected() && self->isVisible())
+                        self->rebuild();
+                });
+                return;
+            }
+            QList<Database::SessionRecord> sessions;
+            const QJsonArray arr = payload["records"].toArray();
+            for (const QJsonValue &v : arr) {
+                const QJsonObject o = v.toObject();
+                Database::SessionRecord r;
+                r.id          = o["id"].toVariant().toLongLong();
+                r.startedAt   = o["started_at"].toString();
+                r.endedAt     = o["ended_at"].toString();
+                r.totalSecs   = o["total_secs"].toInt(-1);
+                r.activeSecs  = o["active_secs"].toInt(-1);
+                r.accountName = o["account_name"].toString();
+                r.charName    = o["char_name"].toString();
+                r.charClass   = o["char_class"].toString();
+                r.installPath = o["install_path"].toString();
+                sessions.append(r);
+            }
+            self->applySessions(sessions);
+            if (self->m_dirty) QTimer::singleShot(0, self.data(), [self] { if (self) self->rebuild(); });
         });
 }
 

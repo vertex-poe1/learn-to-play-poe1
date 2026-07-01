@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QFile>
 #include <QProcess>
+#include <QByteArray>
 
 #include <toml++/toml.hpp>
 
@@ -53,6 +54,9 @@ void ServiceManager::start(const QString &dbPath, const QString &logPath)
         args << "--db-path" << dbPath;
     if (!logPath.isEmpty())
         args << "--log-path" << logPath;
+    const QByteArray serviceLog = qgetenv("L2P_SERVICE_LOG");
+    if (!serviceLog.isEmpty())
+        args << "--service-log" << QString::fromUtf8(serviceLog);
 
     m_process = new QProcess(this);
     m_process->setProgram(binary);

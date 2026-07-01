@@ -48,7 +48,9 @@ func Run(cfg Config) error {
 
 	dialer := websocket.Dialer{HandshakeTimeout: 2 * time.Second}
 	conn, _, err := dialer.Dial("ws://"+addr+"/ws", nil)
-	if err == nil {
+	if err != nil {
+		log.Printf("no incumbent at %s (will bind): %v", addr, err)
+	} else {
 		shouldTakeOver, incumbentVer, negErr := negotiate(conn, cfg)
 		conn.Close()
 		if negErr != nil {
@@ -131,7 +133,11 @@ func serve(cfg Config, listener net.Listener) error {
 		qdb, err = query.Open(cfg.DbPath)
 		if err != nil {
 			log.Printf("warn: cannot open l2p db %q: %v", cfg.DbPath, err)
+		} else {
+			log.Printf("opened l2p db %q", cfg.DbPath)
 		}
+	} else {
+		log.Printf("no db path configured; log queries will fail")
 	}
 
 	h := hub.New()
@@ -356,6 +362,15 @@ func (s *server) handleRequest(c *hub.Client, msg proto.Message) {
 	case "dm.messages":
 		s.handleDmMessages(c, msg)
 
+	case "log.sessions":
+		s.handleLogSessions(c, msg)
+
+	case "log.session":
+		s.handleLogSession(c, msg)
+
+	case "log.zones":
+		s.handleLogZones(c, msg)
+
 	default:
 		s.send(c, proto.Message{
 			Type:  proto.TypeResponse,
@@ -417,6 +432,85 @@ func (s *server) handleDmMessages(c *hub.Client, msg proto.Message) {
 		Type:    proto.TypeResponse,
 		ID:      msg.ID,
 		Payload: mustMarshal(map[string]any{"records": records}),
+	})
+}
+
+func (s *server) handleLogSessions(c *hub.Client, msg proto.Message) {
+	if s.queryDB == nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "no db configured"})
+		return
+	}
+	var params struct {
+		Limit  int `json:"limit"`
+		Offset int `json:"offset"`
+	}
+	if err := json.Unmarshal(msg.Payload, &params); err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "bad params: " + err.Error()})
+		return
+	}
+	records, err := s.queryDB.FetchSessions(params.Limit, params.Offset)
+	if err != nil {
+		log.Printf("log.sessions error (limit=%d offset=%d): %v", params.Limit, params.Offset, err)
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: err.Error()})
+		return
+	}
+	log.Printf("log.sessions ok: %d records (limit=%d offset=%d)", len(records), params.Limit, params.Offset)
+	s.send(c, proto.Message{
+		Type:    proto.TypeResponse,
+		ID:      msg.ID,
+		Payload: mustMarshal(map[string]any{"records": records}),
+	})
+}
+
+func (s *server) handleLogSession(c *hub.Client, msg proto.Message) {
+	if s.queryDB == nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "no db configured"})
+		return
+	}
+	var params struct {
+		SessionID         int64 `json:"session_id"`
+		ZoneLimit         int   `json:"zone_limit"`
+		SessionEventLimit int   `json:"session_event_limit"`
+	}
+	if err := json.Unmarshal(msg.Payload, &params); err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "bad params: " + err.Error()})
+		return
+	}
+	data, err := s.queryDB.FetchSessionPageData(params.SessionID, params.SessionEventLimit, params.ZoneLimit)
+	if err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: err.Error()})
+		return
+	}
+	s.send(c, proto.Message{
+		Type:    proto.TypeResponse,
+		ID:      msg.ID,
+		Payload: mustMarshal(data),
+	})
+}
+
+func (s *server) handleLogZones(c *hub.Client, msg proto.Message) {
+	if s.queryDB == nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "no db configured"})
+		return
+	}
+	var params struct {
+		SessionID int64 `json:"session_id"`
+		Limit     int   `json:"limit"`
+		Offset    int   `json:"offset"`
+	}
+	if err := json.Unmarshal(msg.Payload, &params); err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "bad params: " + err.Error()})
+		return
+	}
+	zones, err := s.queryDB.FetchZoneTransitions(params.SessionID, params.Limit, params.Offset)
+	if err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: err.Error()})
+		return
+	}
+	s.send(c, proto.Message{
+		Type:    proto.TypeResponse,
+		ID:      msg.ID,
+		Payload: mustMarshal(map[string]any{"zones": zones}),
 	})
 }
 

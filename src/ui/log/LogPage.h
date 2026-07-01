@@ -6,7 +6,7 @@
 #include <QWidget>
 
 struct LiveEvent;
-class QueryService;
+class PoeInfoClient;
 class QLabel;
 class QScrollArea;
 class QVBoxLayout;
@@ -17,7 +17,7 @@ class LogPage : public QWidget
     Q_OBJECT
 public:
     explicit LogPage(QWidget *parent = nullptr);
-    void setQueryService(QueryService *qs);
+    void setPoeInfoClient(PoeInfoClient *client);
     void markDirty();
     void preload();
     QLabel *loadingOverlay() const { return m_loadingOverlay; }
@@ -46,7 +46,7 @@ private:
     static constexpr int kPageStep     = 50;
     static constexpr int kMaxWindow    = 300;
 
-    QueryService *m_queryService{};
+    PoeInfoClient *m_poeInfoClient{};
     QScrollArea  *m_scroll{};
     QWidget      *m_content{};
     QVBoxLayout  *m_contentLayout{};
