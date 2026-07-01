@@ -1,3 +1,5 @@
+// src/ui/settings/SettingsPage.cpp (C++)
+
 #include "core/DeferredTaskQueue.h"
 #include "ui/settings/SettingsPage.h"
 #include "core/AppConfig.h"
@@ -41,101 +43,110 @@
 // ---------------------------------------------------------------------------
 // Alert rule helpers (event/action presets)
 // ---------------------------------------------------------------------------
-namespace {
-
-struct EventPreset {
-    QString     label;
-    QString     eventType;
-    QVariantMap dataFilter;
-    QString     hint;
-};
-
-struct ActionPreset {
-    QString label;
-    QString actionType;
-};
-
-const QVector<EventPreset> &eventPresets()
+namespace
 {
-    static const QVector<EventPreset> v = {
-        {"(any event)",              "",                {},                                                       "{type}, {timestamp}"},
-        {"Whisper from player",      "whisper",         {{"direction", "from"}},                                  "{player}: {message}"},
-        {"Whisper to player",        "whisper",         {{"direction", "to"}},                                    "{player}: {message}"},
-        {"Area entered",             "area_entered",    {},                                                       "{area_name} (level {area_level})"},
-        {"Level up",                 "level_up",        {},                                                       "{character} ({char_class}) is now level {level}"},
-        {"Character death",          "character_death", {},                                                       "{character} has been slain"},
-        {"Achievement unlocked",     "achievement",     {},                                                       "{name}"},
-        {"Hideout discovered",       "hideout_discovered", {},                                                    "{name}"},
-        {"Global chat (#)",          "chat",            {{"channel", "#"}},                                       "{player}: {message}"},
-        {"Trade chat ($)",           "chat",            {{"channel", "$"}},                                       "{player}: {message}"},
-        {"Party chat (%)",           "chat",            {{"channel", "%"}},                                       "{player}: {message}"},
-        {"Guild chat (&)",           "chat",            {{"channel", "&"}},                                       "{player}: {message}"},
-        {"Monsters cleared",         "quest_event",     {{"event_type", "monsters_cleared"}},                     ""},
-        {"Passive skill point",      "quest_event",     {{"event_type", "passive_skill_point_received"}},         ""},
-        {"Kitava resist penalty",    "quest_event",     {{"event_type", "kitava_resistance_penalty"}},            ""},
-        {"Labyrinth craft options",  "quest_event",     {{"event_type", "labyrinth_craft_options_received"}},     ""},
-        {"AFK on",                   "afk_on",          {},                                                       ""},
-        {"AFK off",                  "afk_off",         {},                                                       "Duration: {duration_secs}s"},
-        {"Patch required",           "general_event",   {{"event_type", "patch_required"}},                      ""},
-        {"Session started",          "session_start",   {},                                                       ""},
+
+    struct EventPreset
+    {
+        QString label;
+        QString eventType;
+        QVariantMap dataFilter;
+        QString hint;
     };
-    return v;
-}
 
-const QVector<ActionPreset> &actionPresets()
-{
-    static const QVector<ActionPreset> v = {
-        {"Show notification", "notify"},
+    struct ActionPreset
+    {
+        QString label;
+        QString actionType;
     };
-    return v;
-}
 
-int findEventPresetIndex(const LiveEventRule &rule)
-{
-    const auto &presets = eventPresets();
-    for (int i = 0; i < presets.size(); ++i) {
-        if (presets[i].eventType == rule.eventType && presets[i].dataFilter == rule.dataFilter)
-            return i;
+    const QVector<EventPreset> &eventPresets()
+    {
+        static const QVector<EventPreset> v = {
+            {"(any event)", "", {}, "{type}, {timestamp}"},
+            {"Whisper from player", "whisper", {{"direction", "from"}}, "{player}: {message}"},
+            {"Whisper to player", "whisper", {{"direction", "to"}}, "{player}: {message}"},
+            {"Area entered", "area_entered", {}, "{area_name} (level {area_level})"},
+            {"Level up", "level_up", {}, "{character} ({char_class}) is now level {level}"},
+            {"Character death", "character_death", {}, "{character} has been slain"},
+            {"Achievement unlocked", "achievement", {}, "{name}"},
+            {"Hideout discovered", "hideout_discovered", {}, "{name}"},
+            {"Global chat (#)", "chat", {{"channel", "#"}}, "{player}: {message}"},
+            {"Trade chat ($)", "chat", {{"channel", "$"}}, "{player}: {message}"},
+            {"Party chat (%)", "chat", {{"channel", "%"}}, "{player}: {message}"},
+            {"Guild chat (&)", "chat", {{"channel", "&"}}, "{player}: {message}"},
+            {"Monsters cleared", "quest_event", {{"event_type", "monsters_cleared"}}, ""},
+            {"Passive skill point", "quest_event", {{"event_type", "passive_skill_point_received"}}, ""},
+            {"Kitava resist penalty", "quest_event", {{"event_type", "kitava_resistance_penalty"}}, ""},
+            {"Labyrinth craft options", "quest_event", {{"event_type", "labyrinth_craft_options_received"}}, ""},
+            {"AFK on", "afk_on", {}, ""},
+            {"AFK off", "afk_off", {}, "Duration: {duration_secs}s"},
+            {"Patch required", "general_event", {{"event_type", "patch_required"}}, ""},
+            {"Session started", "session_start", {}, ""},
+        };
+        return v;
     }
-    return 0;
-}
 
-int findActionPresetIndex(const LiveEventRule &rule)
-{
-    const auto &presets = actionPresets();
-    for (int i = 0; i < presets.size(); ++i) {
-        if (presets[i].actionType == rule.actionType)
-            return i;
+    const QVector<ActionPreset> &actionPresets()
+    {
+        static const QVector<ActionPreset> v = {
+            {"Show notification", "notify"},
+        };
+        return v;
     }
-    return 0;
-}
 
-QString ruleDescription(const LiveEventRule &rule)
-{
-    const QString action = rule.actionType == QLatin1String("notify")
-        ? QStringLiteral("Show notification") : rule.actionType;
-    const QString msg    = rule.actionParams.value("message").toString();
-    const QString detail = msg.isEmpty() ? QString() : QStringLiteral(": \"%1\"").arg(msg);
-    return QStringLiteral("When: %1  →  %2%3").arg(rule.label, action, detail);
-}
+    int findEventPresetIndex(const LiveEventRule &rule)
+    {
+        const auto &presets = eventPresets();
+        for (int i = 0; i < presets.size(); ++i)
+        {
+            if (presets[i].eventType == rule.eventType && presets[i].dataFilter == rule.dataFilter)
+                return i;
+        }
+        return 0;
+    }
 
-struct UaEntry { const char *label; const char *ua; };
-static const UaEntry kUserAgents[] = {
-    {"Brave (win11)",
-     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"},
-    {"Chrome (win11)",
-     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"},
-    {"Edge (win11)",
-     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0"},
-    {"Firefox (win11)",
-     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"},
-};
+    int findActionPresetIndex(const LiveEventRule &rule)
+    {
+        const auto &presets = actionPresets();
+        for (int i = 0; i < presets.size(); ++i)
+        {
+            if (presets[i].actionType == rule.actionType)
+                return i;
+        }
+        return 0;
+    }
+
+    QString ruleDescription(const LiveEventRule &rule)
+    {
+        const QString action = rule.actionType == QLatin1String("notify")
+                                   ? QStringLiteral("Show notification")
+                                   : rule.actionType;
+        const QString msg = rule.actionParams.value("message").toString();
+        const QString detail = msg.isEmpty() ? QString() : QStringLiteral(": \"%1\"").arg(msg);
+        return QStringLiteral("When: %1  →  %2%3").arg(rule.label, action, detail);
+    }
+
+    struct UaEntry
+    {
+        const char *label;
+        const char *ua;
+    };
+    static const UaEntry kUserAgents[] = {
+        {"Brave (win11)",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"},
+        {"Chrome (win11)",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"},
+        {"Edge (win11)",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0"},
+        {"Firefox (win11)",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"},
+    };
 
 } // namespace
 
 SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
-    : QWidget(parent)
-    , m_config(config)
+    : QWidget(parent), m_config(config)
 {
     m_accountStore = new PoeAccountStore(this);
 
@@ -172,12 +183,13 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     outerLayout->addWidget(m_stack, 1);
 
     // ---- Page 0: Category list ----------------------------------------
-    auto *categoryPage   = new QWidget;
+    auto *categoryPage = new QWidget;
     auto *categoryLayout = new QVBoxLayout(categoryPage);
     categoryLayout->setContentsMargins(Theme::spacing2xl, Theme::spacingXl, Theme::spacing2xl, Theme::spacingXl);
     categoryLayout->setSpacing(Theme::spacingBase);
 
-    const auto makeItemBtn = [&](const QString &label, bool arrow = true) {
+    const auto makeItemBtn = [&](const QString &label, bool arrow = true)
+    {
         auto *btn = new QPushButton(arrow ? label + "  ›" : label, categoryPage);
         QFont btnFont = btn->font();
         btnFont.setPointSizeF(Theme::fontXl);
@@ -187,13 +199,13 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
             "QPushButton { background-color: palette(button); border: none;"
             "              border-radius: 8px; padding: 8px 16px; }"
             "QPushButton:hover    { background-color: palette(light); }"
-            "QPushButton:pressed  { background-color: palette(mid); }"
-        );
+            "QPushButton:pressed  { background-color: palette(mid); }");
         categoryLayout->addWidget(btn);
         return btn;
     };
 
-    const auto addDivider = [&]() {
+    const auto addDivider = [&]()
+    {
         auto *w = new QWidget(categoryPage);
         auto *l = new QVBoxLayout(w);
         l->setContentsMargins(Theme::spacingSm, Theme::spacingXs, Theme::spacingSm, Theme::spacingXs);
@@ -207,42 +219,51 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     m_stack->addWidget(categoryPage); // index 0
 
     connect(makeItemBtn("Alerts"), &QPushButton::clicked,
-            this, [this] { loadPageAsync(6, "Alerts"); });
+            this, [this]
+            { loadPageAsync(6, "Alerts"); });
 
     addDivider();
 
     connect(makeItemBtn("Accounts"), &QPushButton::clicked,
-            this, [this] { loadPageAsync(8, "Accounts"); });
-    connect(makeItemBtn("Game"),    &QPushButton::clicked,
-            this, [this] { loadPageAsync(1, "Game"); });
+            this, [this]
+            { loadPageAsync(8, "Accounts"); });
+    connect(makeItemBtn("Game"), &QPushButton::clicked,
+            this, [this]
+            { loadPageAsync(1, "Game"); });
     connect(makeItemBtn("Overlay"), &QPushButton::clicked,
-            this, [this] { loadPageAsync(2, "Overlay"); });
-    connect(makeItemBtn("Window"),  &QPushButton::clicked,
-            this, [this] { loadPageAsync(3, "Window"); });
-    connect(makeItemBtn("Chat"),    &QPushButton::clicked,
-            this, [this] { loadPageAsync(4, "Chat"); });
+            this, [this]
+            { loadPageAsync(2, "Overlay"); });
+    connect(makeItemBtn("Window"), &QPushButton::clicked,
+            this, [this]
+            { loadPageAsync(3, "Window"); });
+    connect(makeItemBtn("Chat"), &QPushButton::clicked,
+            this, [this]
+            { loadPageAsync(4, "Chat"); });
 
     addDivider();
 
     m_debugCategoryBtn = makeItemBtn("Debug");
     m_debugCategoryBtn->setVisible(config.debugMode);
     connect(m_debugCategoryBtn, &QPushButton::clicked,
-            this, [this] { loadPageAsync(7, "Debug"); });
+            this, [this]
+            { loadPageAsync(7, "Debug"); });
 
-    connect(makeItemBtn("About"),  &QPushButton::clicked,
-            this, [this] { loadPageAsync(5, "About"); });
+    connect(makeItemBtn("About"), &QPushButton::clicked,
+            this, [this]
+            { loadPageAsync(5, "About"); });
 
-    connect(makeItemBtn("Exit App", false), &QPushButton::clicked, this, [this]() {
+    connect(makeItemBtn("Exit App", false), &QPushButton::clicked, this, [this]()
+            {
         const auto reply = QMessageBox::question(this, "Exit", "Really exit?",
                                                  QMessageBox::Yes | QMessageBox::Cancel,
                                                  QMessageBox::Yes);
         if (reply == QMessageBox::Yes)
-            qApp->quit();
-    });
+            qApp->quit(); });
 
     categoryLayout->addStretch(1);
 
-    for (int i = 1; i <= 8; ++i) {
+    for (int i = 1; i <= 8; ++i)
+    {
         m_stack->addWidget(new QWidget(this));
     }
     m_loadingPage = new QWidget(this);
@@ -255,8 +276,8 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
     loadingLayout->addWidget(loadingLabel);
     m_stack->addWidget(m_loadingPage); // index 9
 
-
-    connect(this, &SettingsPage::configChanged, this, [this]() {
+    connect(this, &SettingsPage::configChanged, this, [this]()
+            {
         qDebug() << "configChanged lambda start";
         const bool debug = m_config.debugMode;
         m_debugCategoryBtn->setVisible(debug);
@@ -268,8 +289,7 @@ SettingsPage::SettingsPage(AppConfig &config, QWidget *parent)
                                       : m_config.effectiveUserAgent();
             m_accountsUaDisplay->setText(displayUa);
         }
-        if (m_accountsUaCopyBtn) m_accountsUaCopyBtn->setVisible(debug);
-    });
+        if (m_accountsUaCopyBtn) m_accountsUaCopyBtn->setVisible(debug); });
 }
 
 void SettingsPage::buildGamePage(QWidget *parent)
@@ -283,7 +303,7 @@ void SettingsPage::buildGamePage(QWidget *parent)
     gameScroll->setFrameShape(QFrame::NoFrame);
 
     auto *gameContent = new QWidget;
-    auto *gameForm    = new QFormLayout(gameContent);
+    auto *gameForm = new QFormLayout(gameContent);
     gameForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_autoDetect = new QCheckBox(gameContent);
@@ -303,9 +323,10 @@ void SettingsPage::buildGamePage(QWidget *parent)
 
     gameScroll->setWidget(gameContent);
     parentLayout->addWidget(gameScroll);
-    connect(m_autoDetect,     &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
-    connect(m_installDirs,    &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
-    connect(m_exeNames,       &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
+    connect(m_autoDetect, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
+    connect(m_installDirs, &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
+    connect(m_exeNames, &ListEditor::itemsChanged, this, &SettingsPage::saveAndEmit);
 }
 
 void SettingsPage::buildOverlayPage(QWidget *parent)
@@ -313,10 +334,9 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 2: Overlay -----------------------------------------------
     auto *overlayContent = new QWidget;
-    auto *overlayForm    = new QFormLayout(overlayContent);
+    auto *overlayForm = new QFormLayout(overlayContent);
     overlayForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_enableOverlay = new QCheckBox(overlayContent);
@@ -329,37 +349,39 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
 
     m_overlayColumns = new QComboBox(layoutContainer);
     m_overlayColumns->addItem("Auto");
-    for (int i = 1; i <= 20; ++i) {
+    for (int i = 1; i <= 20; ++i)
+    {
         m_overlayColumns->addItem(QString::number(i));
     }
     m_overlayColumns->setCurrentIndex(m_config.overlayColumns);
 
     m_overlayRows = new QComboBox(layoutContainer);
     m_overlayRows->addItem("Auto");
-    for (int i = 1; i <= 20; ++i) {
+    for (int i = 1; i <= 20; ++i)
+    {
         m_overlayRows->addItem(QString::number(i));
     }
     m_overlayRows->setCurrentIndex(m_config.overlayRows);
 
-    connect(m_overlayColumns, &QComboBox::currentIndexChanged, this, [this](int index) {
+    connect(m_overlayColumns, &QComboBox::currentIndexChanged, this, [this](int index)
+            {
         if (index == 0) {
             QSignalBlocker blocker(m_overlayRows);
             m_overlayRows->setCurrentIndex(1);
         } else if (index > 0 && m_overlayRows->currentIndex() > 0) {
             QSignalBlocker blocker(m_overlayRows);
             m_overlayRows->setCurrentIndex(0);
-        }
-    });
-    connect(m_overlayRows, &QComboBox::currentIndexChanged, this, [this](int index) {
+        } });
+    connect(m_overlayRows, &QComboBox::currentIndexChanged, this, [this](int index)
+            {
         if (index == 0) {
             QSignalBlocker blocker(m_overlayColumns);
             m_overlayColumns->setCurrentIndex(1);
         } else if (index > 0 && m_overlayColumns->currentIndex() > 0) {
             QSignalBlocker blocker(m_overlayColumns);
             m_overlayColumns->setCurrentIndex(0);
-        }
-    });
-    
+        } });
+
     auto *columnsLabel = new QLabel("Columns:", layoutContainer);
     columnsLabel->setToolTip("Vertical");
     layoutHBox->addWidget(columnsLabel);
@@ -370,7 +392,7 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     layoutHBox->addWidget(rowsLabel);
     layoutHBox->addWidget(m_overlayRows);
     layoutHBox->addStretch();
-    
+
     overlayForm->addRow("Icon layout:", layoutContainer);
 
     auto *checkboxesWidget = new QWidget(overlayContent);
@@ -395,7 +417,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
     // Helper: builds an icon+label widget paired with a checkbox and connects it.
     const auto addIconRow = [&](QFormLayout *form, QCheckBox *&member,
                                 const char *icon, const QString &label,
-                                const QString &tooltip, bool checked) {
+                                const QString &tooltip, bool checked)
+    {
         member = new QCheckBox(overlayContent);
         member->setChecked(checked);
         member->setToolTip(tooltip);
@@ -410,7 +433,8 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
         l->addWidget(new QLabel(label + u':', w));
         l->addStretch();
         form->addRow(w, member);
-        connect(member, &QCheckBox::toggled, this, [this](bool) { saveAndEmit(); });
+        connect(member, &QCheckBox::toggled, this, [this](bool)
+                { saveAndEmit(); });
     };
 
     teleportForm->addRow(new QLabel("<b>Teleport Shortcuts</b>", overlayContent));
@@ -421,33 +445,37 @@ void SettingsPage::buildOverlayPage(QWidget *parent)
         new QLabel("<span style=\"color: #c8a84b; font-family: 'Palatino Linotype', 'Book Antiqua', 'Palatino', serif; font-size: 14px; font-weight: bold; font-style: italic; letter-spacing: 2px;\">l2p</span> App Focus:", overlayContent),
         m_overlayL2P);
 
-    addIconRow(teleportForm, m_overlayHideout,    ":/icons/fleur-de-lis.svg",        "Hideout",    "/hideout",    m_config.overlayShowHideout);
-    addIconRow(teleportForm, m_overlayGuild,      ":/icons/fleur-de-lis-shield.svg", "Guild",      "/guild",      m_config.overlayShowGuild);
-    addIconRow(teleportForm, m_overlayMenagerie,  ":/icons/cattle-skull.svg",        "Menagerie",  "/menagerie",  m_config.overlayShowMenagerie);
-    addIconRow(teleportForm, m_overlayMonastery,  ":/icons/branch.svg",              "Monastery",  "/monastery",  m_config.overlayShowMonastery);
-    addIconRow(teleportForm, m_overlayHeist,      ":/icons/safe2-fill.svg",          "Heist",      "/heist",      m_config.overlayShowHeist);
-    addIconRow(teleportForm, m_overlaySanctum,    ":/icons/door-open-fill.svg",      "Sanctum",    "/sanctum",    m_config.overlayShowSanctum);
-    addIconRow(teleportForm, m_overlayDelve,      ":/icons/minecart-loaded.svg",     "Delve",      "/delve",      m_config.overlayShowDelve);
-    addIconRow(teleportForm, m_overlayKingsmarch, ":/icons/shop.svg",                "Kingsmarch", "/kingsmarch", m_config.overlayShowKingsmarch);
+    addIconRow(teleportForm, m_overlayHideout, ":/icons/fleur-de-lis.svg", "Hideout", "/hideout", m_config.overlayShowHideout);
+    addIconRow(teleportForm, m_overlayGuild, ":/icons/fleur-de-lis-shield.svg", "Guild", "/guild", m_config.overlayShowGuild);
+    addIconRow(teleportForm, m_overlayMenagerie, ":/icons/cattle-skull.svg", "Menagerie", "/menagerie", m_config.overlayShowMenagerie);
+    addIconRow(teleportForm, m_overlayMonastery, ":/icons/branch.svg", "Monastery", "/monastery", m_config.overlayShowMonastery);
+    addIconRow(teleportForm, m_overlayHeist, ":/icons/safe2-fill.svg", "Heist", "/heist", m_config.overlayShowHeist);
+    addIconRow(teleportForm, m_overlaySanctum, ":/icons/door-open-fill.svg", "Sanctum", "/sanctum", m_config.overlayShowSanctum);
+    addIconRow(teleportForm, m_overlayDelve, ":/icons/minecart-loaded.svg", "Delve", "/delve", m_config.overlayShowDelve);
+    addIconRow(teleportForm, m_overlayKingsmarch, ":/icons/shop.svg", "Kingsmarch", "/kingsmarch", m_config.overlayShowKingsmarch);
 
     infoForm->addRow(new QLabel("<b>Informational</b>", overlayContent));
 
-    addIconRow(infoForm, m_overlayLadder,           ":/icons/trophy-fill.svg",        "Top 10 Ladder",      "/ladder",           m_config.overlayShowLadder);
-    addIconRow(infoForm, m_overlayTimePlayed,        ":/icons/stopwatch-fill.svg",     "Time Played",        "/played",           m_config.overlayShowTimePlayed);
-    addIconRow(infoForm, m_overlayCharacterAge,      ":/icons/stopwatch-fill.svg",     "Character Age",      "/age",              m_config.overlayShowCharacterAge);
-    addIconRow(infoForm, m_overlayPassives,          ":/icons/tree-fill.svg",          "Passives",           "/passives",         m_config.overlayShowPassives);
-    addIconRow(infoForm, m_overlayDeaths,            ":/icons/person-fill.svg",        "Deaths",             "/deaths",           m_config.overlayShowDeaths);
-    addIconRow(infoForm, m_overlayMonstersRemaining, ":/icons/bug-fill.svg",           "Monsters Remaining", "/remaining",        m_config.overlayShowMonstersRemaining);
-    addIconRow(infoForm, m_overlayAtlasPassives,     ":/icons/map-fill.svg",           "Atlas Passives",     "/atlaspassives",    m_config.overlayShowAtlasPassives);
-    addIconRow(infoForm, m_overlayKills,             ":/icons/bullseye.svg",           "Kills",              "/kills",            m_config.overlayShowKills);
-    addIconRow(infoForm, m_overlayResetXP,           ":/icons/box-arrow-in-right.svg", "Reset XP",           "/reset_xp",         m_config.overlayShowResetXP);
-    addIconRow(infoForm, m_overlayReloadItemFilter,  ":/icons/indent.svg",             "Reload Item Filter", "/reloaditemfilter", m_config.overlayShowReloadItemFilter);
+    addIconRow(infoForm, m_overlayLadder, ":/icons/trophy-fill.svg", "Top 10 Ladder", "/ladder", m_config.overlayShowLadder);
+    addIconRow(infoForm, m_overlayTimePlayed, ":/icons/stopwatch-fill.svg", "Time Played", "/played", m_config.overlayShowTimePlayed);
+    addIconRow(infoForm, m_overlayCharacterAge, ":/icons/stopwatch-fill.svg", "Character Age", "/age", m_config.overlayShowCharacterAge);
+    addIconRow(infoForm, m_overlayPassives, ":/icons/tree-fill.svg", "Passives", "/passives", m_config.overlayShowPassives);
+    addIconRow(infoForm, m_overlayDeaths, ":/icons/person-fill.svg", "Deaths", "/deaths", m_config.overlayShowDeaths);
+    addIconRow(infoForm, m_overlayMonstersRemaining, ":/icons/bug-fill.svg", "Monsters Remaining", "/remaining", m_config.overlayShowMonstersRemaining);
+    addIconRow(infoForm, m_overlayAtlasPassives, ":/icons/map-fill.svg", "Atlas Passives", "/atlaspassives", m_config.overlayShowAtlasPassives);
+    addIconRow(infoForm, m_overlayKills, ":/icons/bullseye.svg", "Kills", "/kills", m_config.overlayShowKills);
+    addIconRow(infoForm, m_overlayResetXP, ":/icons/box-arrow-in-right.svg", "Reset XP", "/reset_xp", m_config.overlayShowResetXP);
+    addIconRow(infoForm, m_overlayReloadItemFilter, ":/icons/indent.svg", "Reload Item Filter", "/reloaditemfilter", m_config.overlayShowReloadItemFilter);
 
     parentLayout->addWidget(overlayContent);
-    connect(m_enableOverlay,  &QCheckBox::toggled,             this, [this](bool) { saveAndEmit(); });
-    connect(m_overlayColumns, &QComboBox::currentIndexChanged, this, [this](int)  { saveAndEmit(); });
-    connect(m_overlayRows,    &QComboBox::currentIndexChanged, this, [this](int)  { saveAndEmit(); });
-    connect(m_overlayL2P,     &QCheckBox::toggled,             this, [this](bool) { saveAndEmit(); });
+    connect(m_enableOverlay, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
+    connect(m_overlayColumns, &QComboBox::currentIndexChanged, this, [this](int)
+            { saveAndEmit(); });
+    connect(m_overlayRows, &QComboBox::currentIndexChanged, this, [this](int)
+            { saveAndEmit(); });
+    connect(m_overlayL2P, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
 }
 
 void SettingsPage::buildWindowPage(QWidget *parent)
@@ -455,10 +483,9 @@ void SettingsPage::buildWindowPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 3: Window -----------------------------------------------
     auto *windowContent = new QWidget;
-    auto *windowForm    = new QFormLayout(windowContent);
+    auto *windowForm = new QFormLayout(windowContent);
     windowForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_defaultTab = new QComboBox(windowContent);
@@ -476,9 +503,12 @@ void SettingsPage::buildWindowPage(QWidget *parent)
     windowForm->addRow("Minimize to tray on close:", m_minimizeToTray);
 
     parentLayout->addWidget(windowContent);
-    connect(m_defaultTab,     &QComboBox::currentIndexChanged, this, [this](int) { saveAndEmit(); });
-    connect(m_startMinimized, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
-    connect(m_minimizeToTray, &QCheckBox::toggled,       this, [this](bool) { saveAndEmit(); });
+    connect(m_defaultTab, &QComboBox::currentIndexChanged, this, [this](int)
+            { saveAndEmit(); });
+    connect(m_startMinimized, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
+    connect(m_minimizeToTray, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
 }
 
 void SettingsPage::buildChatPage(QWidget *parent)
@@ -486,10 +516,9 @@ void SettingsPage::buildChatPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 4: Chat -------------------------------------------------
     auto *chatContent = new QWidget;
-    auto *chatForm    = new QFormLayout(chatContent);
+    auto *chatForm = new QFormLayout(chatContent);
     chatForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_showGuildTags = new QCheckBox(chatContent);
@@ -497,7 +526,8 @@ void SettingsPage::buildChatPage(QWidget *parent)
     chatForm->addRow("Display guild tags:", m_showGuildTags);
 
     parentLayout->addWidget(chatContent);
-    connect(m_showGuildTags,   &QCheckBox::toggled,            this, [this](bool) { saveAndEmit(); });
+    connect(m_showGuildTags, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
 }
 
 void SettingsPage::buildAboutPage(QWidget *parent)
@@ -505,15 +535,15 @@ void SettingsPage::buildAboutPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 5: About ------------------------------------------------
     auto *aboutContent = new QWidget;
-    auto *aboutLayout  = new QVBoxLayout(aboutContent);
+    auto *aboutLayout = new QVBoxLayout(aboutContent);
     aboutLayout->setContentsMargins(Theme::spacingBase, Theme::spacingLg, Theme::spacingBase, Theme::spacingLg);
     aboutLayout->setSpacing(Theme::spacingSm);
 
     // Short centered HR: stretch 3:2:3 gives the line 25% of the width
-    const auto makeSep = [&]() -> QWidget * {
+    const auto makeSep = [&]() -> QWidget *
+    {
         auto *w = new QWidget(aboutContent);
         auto *h = new QHBoxLayout(w);
         h->setContentsMargins(0, Theme::spacingSm, 0, Theme::spacingSm);
@@ -535,7 +565,7 @@ void SettingsPage::buildAboutPage(QWidget *parent)
         appTitleLabel->setAlignment(Qt::AlignCenter);
     }
 
-    auto *gameLabel = new QLabel("Path of Exile 1", aboutContent);
+    auto *gameLabel = new QLabel("Path of Exile", aboutContent);
     {
         QFont f = gameLabel->font();
         f.setPointSizeF(Theme::font3xl);
@@ -560,7 +590,10 @@ void SettingsPage::buildAboutPage(QWidget *parent)
         const int iconPx = qRound(Theme::fontXl * 1.5);
         QPixmap iconPix(iconPx, iconPx);
         iconPix.fill(Qt::transparent);
-        { QPainter gp(&iconPix); QSvgRenderer(QStringLiteral(":/brand/vertex-icon.svg")).render(&gp); }
+        {
+            QPainter gp(&iconPix);
+            QSvgRenderer(QStringLiteral(":/brand/vertex-icon.svg")).render(&gp);
+        }
         auto *iconLabel = new QLabel(vertexRow);
         iconLabel->setPixmap(iconPix);
 
@@ -625,10 +658,10 @@ void SettingsPage::buildAboutPage(QWidget *parent)
     aboutDebugRow->addWidget(aboutDebugMode);
     aboutDebugRow->addStretch();
     aboutLayout->addLayout(aboutDebugRow);
-    connect(aboutDebugMode, &QCheckBox::toggled, this, [this, aboutDebugMode](bool) {
+    connect(aboutDebugMode, &QCheckBox::toggled, this, [this, aboutDebugMode](bool)
+            {
         m_config.debugMode = aboutDebugMode->isChecked();
-        saveAndEmit();
-    });
+        saveAndEmit(); });
 
     aboutLayout->addStretch(1);
 
@@ -640,10 +673,9 @@ void SettingsPage::buildAlertsPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 6: Alerts -----------------------------------------------
     auto *alertsContent = new QWidget;
-    auto *alertsLayout  = new QVBoxLayout(alertsContent);
+    auto *alertsLayout = new QVBoxLayout(alertsContent);
     alertsLayout->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
     alertsLayout->setSpacing(Theme::spacingSm);
 
@@ -652,8 +684,8 @@ void SettingsPage::buildAlertsPage(QWidget *parent)
     m_alertsList = new QListWidget(alertsContent);
     alertsLayout->addWidget(m_alertsList, 1);
 
-    auto *alertsBtnAdd    = new QPushButton("Add",    alertsContent);
-    auto *alertsBtnEdit   = new QPushButton("Edit",   alertsContent);
+    auto *alertsBtnAdd = new QPushButton("Add", alertsContent);
+    auto *alertsBtnEdit = new QPushButton("Edit", alertsContent);
     auto *alertsBtnRemove = new QPushButton("Remove", alertsContent);
 
     auto *alertsBtnRow = new QHBoxLayout;
@@ -663,8 +695,8 @@ void SettingsPage::buildAlertsPage(QWidget *parent)
     alertsBtnRow->addWidget(alertsBtnRemove);
     alertsLayout->addLayout(alertsBtnRow);
 
-    connect(alertsBtnAdd,    &QPushButton::clicked, this, &SettingsPage::alertsAddRule);
-    connect(alertsBtnEdit,   &QPushButton::clicked, this, &SettingsPage::alertsEditRule);
+    connect(alertsBtnAdd, &QPushButton::clicked, this, &SettingsPage::alertsAddRule);
+    connect(alertsBtnEdit, &QPushButton::clicked, this, &SettingsPage::alertsEditRule);
     connect(alertsBtnRemove, &QPushButton::clicked, this, &SettingsPage::alertsRemoveRule);
     connect(m_alertsList, &QListWidget::itemDoubleClicked, this, &SettingsPage::alertsEditRule);
 
@@ -676,10 +708,9 @@ void SettingsPage::buildDebugPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 7: Debug ------------------------------------------------
     auto *debugContent = new QWidget;
-    auto *debugForm    = new QFormLayout(debugContent);
+    auto *debugForm = new QFormLayout(debugContent);
     debugForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_debugLog = new QCheckBox(debugContent);
@@ -708,12 +739,14 @@ void SettingsPage::buildDebugPage(QWidget *parent)
     m_customUserAgent = new QLineEdit(debugContent);
     {
         const bool isCustom = m_config.debugLegacyUserAgent == QLatin1String("Custom");
-        const bool isAuto   = m_config.debugLegacyUserAgent == QLatin1String("Auto (Chromium)")
-                              || m_config.debugLegacyUserAgent.isEmpty();
+        const bool isAuto = m_config.debugLegacyUserAgent == QLatin1String("Auto (Chromium)") || m_config.debugLegacyUserAgent.isEmpty();
         m_customUserAgent->setReadOnly(!isCustom);
-        if (isAuto) {
+        if (isAuto)
+        {
             m_customUserAgent->setPlaceholderText("Native Chromium UA");
-        } else {
+        }
+        else
+        {
             m_customUserAgent->setPlaceholderText("User-Agent string");
             m_customUserAgent->setText(isCustom ? m_config.debugLegacyUserAgentCustom
                                                 : m_config.effectiveUserAgent());
@@ -730,9 +763,8 @@ void SettingsPage::buildDebugPage(QWidget *parent)
         {iconPx, iconPx}, devicePixelRatioF())));
     copyBtn->setIconSize({iconPx, iconPx});
     copyBtn->setToolTip("Copy to clipboard");
-    connect(copyBtn, &QPushButton::clicked, this, [this]() {
-        QGuiApplication::clipboard()->setText(m_customUserAgent->text());
-    });
+    connect(copyBtn, &QPushButton::clicked, this, [this]()
+            { QGuiApplication::clipboard()->setText(m_customUserAgent->text()); });
 
     {
         auto *sectionLabel = new QLabel("Official Legacy POE API", debugContent);
@@ -750,10 +782,9 @@ void SettingsPage::buildDebugPage(QWidget *parent)
             {px, px}, devicePixelRatioF())));
         infoBtn->setIconSize({px, px});
         infoBtn->setToolTip("Encrypted Session Token");
-        connect(infoBtn, &QPushButton::clicked, this, []() {
-            QDesktopServices::openUrl(
-                QUrl(docSource("", "rationales/legacy-api").url));
-        });
+        connect(infoBtn, &QPushButton::clicked, this, []()
+                { QDesktopServices::openUrl(
+                      QUrl(docSource("", "rationales/legacy-api").url)); });
 
         auto *sectionRow = new QHBoxLayout;
         sectionRow->setContentsMargins(0, 0, 0, 0);
@@ -792,8 +823,10 @@ void SettingsPage::buildDebugPage(QWidget *parent)
     debugForm->addRow("Include QtWebEngine token:", m_includeQtToken);
 
     parentLayout->addWidget(debugContent);
-    connect(m_debugLog,        &QCheckBox::toggled,            this, [this](bool) { saveAndEmit(); });
-    connect(m_userAgent, &QComboBox::currentIndexChanged, this, [this](int) {
+    connect(m_debugLog, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
+    connect(m_userAgent, &QComboBox::currentIndexChanged, this, [this](int)
+            {
         const bool isCustom = m_userAgent->currentText() == QLatin1String("Custom");
         const bool isAuto   = m_userAgent->currentText() == QLatin1String("Auto (Chromium)");
         m_customUserAgent->setReadOnly(!isCustom);
@@ -812,11 +845,13 @@ void SettingsPage::buildDebugPage(QWidget *parent)
         m_includeQtToken->blockSignals(true);
         m_includeQtToken->setChecked(!isCustom && m_config.debugUserAgentQt);
         m_includeQtToken->blockSignals(false);
-        saveAndEmit();
-    });
-    connect(m_customUserAgent, &QLineEdit::textEdited,         this, [this](const QString &) { saveAndEmit(); });
-    connect(m_includeToolName, &QCheckBox::toggled,            this, [this](bool) { saveAndEmit(); });
-    connect(m_includeQtToken,    &QCheckBox::toggled,            this, [this](bool) { saveAndEmit(); });
+        saveAndEmit(); });
+    connect(m_customUserAgent, &QLineEdit::textEdited, this, [this](const QString &)
+            { saveAndEmit(); });
+    connect(m_includeToolName, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
+    connect(m_includeQtToken, &QCheckBox::toggled, this, [this](bool)
+            { saveAndEmit(); });
 }
 
 void SettingsPage::buildAccountsPage(QWidget *parent)
@@ -824,17 +859,17 @@ void SettingsPage::buildAccountsPage(QWidget *parent)
     auto *parentLayout = new QVBoxLayout(parent);
     parentLayout->setContentsMargins(0, 0, 0, 0);
 
-
     // ---- Page 8: Accounts ---------------------------------------------
     auto *accountsContent = new QWidget;
-    auto *accountsForm    = new QFormLayout(accountsContent);
+    auto *accountsForm = new QFormLayout(accountsContent);
     accountsForm->setContentsMargins(Theme::spacingBase, Theme::spacingBase, Theme::spacingBase, Theme::spacingBase);
 
     m_accountsActionBtn = new QPushButton(accountsContent);
     m_accountsActionBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_accountsActionBtn->setText("Checking...");
     m_accountsActionBtn->setEnabled(false);
-    connect(m_accountsActionBtn, &QPushButton::clicked, this, [this]() {
+    connect(m_accountsActionBtn, &QPushButton::clicked, this, [this]()
+            {
         if (m_hasSession) {
             auto *win = new PoeLoginWindow(m_config, this, PoeLoginWindow::Mode::Browse);
             connect(win, &QObject::destroyed, this, [this]() {
@@ -847,8 +882,7 @@ void SettingsPage::buildAccountsPage(QWidget *parent)
             auto *win = new PoeLoginWindow(m_config, this);
             connect(win, &PoeLoginWindow::sessionCaptured,
                     m_accountStore, &PoeAccountStore::writeSession);
-        }
-    });
+        } });
 
     {
         auto *sectionLabel = new QLabel("Official Legacy POE API", accountsContent);
@@ -869,10 +903,9 @@ void SettingsPage::buildAccountsPage(QWidget *parent)
             {px, px}, devicePixelRatioF())));
         infoBtn->setIconSize({px, px});
         infoBtn->setToolTip("Encrypted Session Token");
-        connect(infoBtn, &QPushButton::clicked, this, []() {
-            QDesktopServices::openUrl(
-                QUrl(docSource("", "rationales/legacy-api").url));
-        });
+        connect(infoBtn, &QPushButton::clicked, this, []()
+                { QDesktopServices::openUrl(
+                      QUrl(docSource("", "rationales/legacy-api").url)); });
 
         auto *accountsActionRow = new QHBoxLayout;
         accountsActionRow->setContentsMargins(0, 0, 0, 0);
@@ -898,9 +931,8 @@ void SettingsPage::buildAccountsPage(QWidget *parent)
             {px, px}, devicePixelRatioF())));
         m_accountsUaCopyBtn->setIconSize({px, px});
         m_accountsUaCopyBtn->setToolTip("Copy to clipboard");
-        connect(m_accountsUaCopyBtn, &QPushButton::clicked, this, [this]() {
-            QGuiApplication::clipboard()->setText(m_accountsUaDisplay->text());
-        });
+        connect(m_accountsUaCopyBtn, &QPushButton::clicked, this, [this]()
+                { QGuiApplication::clipboard()->setText(m_accountsUaDisplay->text()); });
     }
 
     auto *accountsUaRow = new QHBoxLayout;
@@ -914,21 +946,30 @@ void SettingsPage::buildAccountsPage(QWidget *parent)
 
     parentLayout->addWidget(accountsContent);
     connect(m_accountStore, &PoeAccountStore::sessionRead, this,
-            [this](const QString &poesessid) {
-        m_hasSession = !poesessid.isEmpty();
-        updateAccountButton();
-    });
+            [this](const QString &poesessid)
+            {
+                m_hasSession = !poesessid.isEmpty();
+                updateAccountButton();
+            });
     connect(m_accountStore, &PoeAccountStore::sessionWritten, this,
-            [this](bool ok) {
-        if (ok) { m_hasSession = true; updateAccountButton(); }
-    });
+            [this](bool ok)
+            {
+                if (ok)
+                {
+                    m_hasSession = true;
+                    updateAccountButton();
+                }
+            });
     m_accountStore->readSession();
     m_accountsUaLabel->setVisible(m_config.debugMode);
     m_accountsUaDisplay->setVisible(m_config.debugMode);
     m_accountsUaCopyBtn->setVisible(m_config.debugMode);
-    if (m_config.debugLegacyUserAgent != QLatin1String("Auto (Chromium)")) {
+    if (m_config.debugLegacyUserAgent != QLatin1String("Auto (Chromium)"))
+    {
         m_accountsUaDisplay->setText(m_config.effectiveUserAgent());
-    } else {
+    }
+    else
+    {
         // Use the cached native UA if already known; otherwise show placeholder.
         // Do NOT call QWebEngineProfile::defaultProfile() here — on first call it
         // blocks the main thread while the WebEngine renderer process starts, which
@@ -936,34 +977,58 @@ void SettingsPage::buildAccountsPage(QWidget *parent)
         // The field is updated by refreshAutoUADisplay() (called from Debug page
         // interactions) or by the configChanged handler once WebEngine is ready.
         m_accountsUaDisplay->setText(m_nativeChromiumUA.isEmpty()
-                                      ? QStringLiteral("Auto (Chromium)")
-                                      : autoChromiumUA());
+                                         ? QStringLiteral("Auto (Chromium)")
+                                         : autoChromiumUA());
     }
 }
 
-
-void SettingsPage::preloadSubPages(QObject* requestor)
+void SettingsPage::preloadSubPages(QObject *requestor)
 {
-    static const struct { int index; } kSubPages[] = {{1},{2},{3},{4},{5},{6},{7},{8}};
-    for (const auto &p : kSubPages) {
-        if (m_pageLoaded[p.index]) continue;
+    static const struct
+    {
+        int index;
+    } kSubPages[] = {{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}};
+    for (const auto &p : kSubPages)
+    {
+        if (m_pageLoaded[p.index])
+            continue;
         const int idx = p.index;
         DeferredTaskQueue::instance().enqueue(
             QString("settings_page_%1").arg(idx),
             DeferredTaskQueue::Low,
-            [this, idx]() {
-                if (m_pageLoaded[idx]) return;
+            [this, idx]()
+            {
+                if (m_pageLoaded[idx])
+                    return;
                 QWidget *w = m_stack->widget(idx);
-                switch (idx) {
-                    case 1: buildGamePage(w);     break;
-                    case 2: buildOverlayPage(w);  break;
-                    case 3: buildWindowPage(w);   break;
-                    case 4: buildChatPage(w);     break;
-                    case 5: buildAboutPage(w);    break;
-                    case 6: buildAlertsPage(w);   break;
-                    case 7: buildDebugPage(w);    break;
-                    case 8: buildAccountsPage(w); break;
-                    default: break;
+                switch (idx)
+                {
+                case 1:
+                    buildGamePage(w);
+                    break;
+                case 2:
+                    buildOverlayPage(w);
+                    break;
+                case 3:
+                    buildWindowPage(w);
+                    break;
+                case 4:
+                    buildChatPage(w);
+                    break;
+                case 5:
+                    buildAboutPage(w);
+                    break;
+                case 6:
+                    buildAlertsPage(w);
+                    break;
+                case 7:
+                    buildDebugPage(w);
+                    break;
+                case 8:
+                    buildAccountsPage(w);
+                    break;
+                default:
+                    break;
                 }
                 m_pageLoaded[idx] = true;
             },
@@ -971,7 +1036,7 @@ void SettingsPage::preloadSubPages(QObject* requestor)
     }
 }
 
-    void SettingsPage::navigateTo(int pageIndex, const QString &title)
+void SettingsPage::navigateTo(int pageIndex, const QString &title)
 {
     if (pageIndex == 6)
         alertsRebuildList();
@@ -980,10 +1045,10 @@ void SettingsPage::preloadSubPages(QObject* requestor)
     m_stack->setCurrentIndex(pageIndex);
 }
 
-
 void SettingsPage::loadPageAsync(int pageIndex, const QString &title)
 {
-    if (m_stack->currentIndex() == 9 && m_targetPageIndex != pageIndex) {
+    if (m_stack->currentIndex() == 9 && m_targetPageIndex != pageIndex)
+    {
         // We are currently loading a DIFFERENT page. Deprioritize it.
         DeferredTaskQueue::instance().setPriority(QString("settings_page_%1").arg(m_targetPageIndex), DeferredTaskQueue::Low);
     }
@@ -992,7 +1057,8 @@ void SettingsPage::loadPageAsync(int pageIndex, const QString &title)
     m_titleLabel->setText(title);
     m_backBtn->setVisible(true);
 
-    if (m_pageLoaded[pageIndex]) {
+    if (m_pageLoaded[pageIndex])
+    {
         if (pageIndex == 6)
             alertsRebuildList();
         m_stack->setCurrentIndex(pageIndex);
@@ -1005,7 +1071,8 @@ void SettingsPage::loadPageAsync(int pageIndex, const QString &title)
     // is processed naturally before the builder runs, without pumping a nested event
     // loop (which would risk re-entrancy into loadPageAsync). The m_targetPageIndex
     // guard skips the enqueue if the user navigated away before this tick fires.
-    QTimer::singleShot(0, this, [this, pageIndex] {
+    QTimer::singleShot(0, this, [this, pageIndex]
+                       {
         if (m_targetPageIndex != pageIndex)
             return;
         DeferredTaskQueue::instance().enqueue(
@@ -1033,13 +1100,13 @@ void SettingsPage::loadPageAsync(int pageIndex, const QString &title)
                     m_stack->setCurrentIndex(pageIndex);
                     m_targetPageIndex = 0;
                 }
-            });
-    });
+            }); });
 }
 
 void SettingsPage::navigateBack()
 {
-    if (m_stack->currentIndex() == 9) {
+    if (m_stack->currentIndex() == 9)
+    {
         // We are going back while loading. Deprioritize the current loading task.
         DeferredTaskQueue::instance().setPriority(QString("settings_page_%1").arg(m_targetPageIndex), DeferredTaskQueue::Low);
     }
@@ -1051,7 +1118,8 @@ void SettingsPage::navigateBack()
 
 void SettingsPage::hideEvent(QHideEvent *event)
 {
-    if (m_stack->currentIndex() == 9) {
+    if (m_stack->currentIndex() == 9)
+    {
         DeferredTaskQueue::instance().setPriority(QString("settings_page_%1").arg(m_targetPageIndex), DeferredTaskQueue::Low);
     }
     QWidget::hideEvent(event);
@@ -1060,7 +1128,8 @@ void SettingsPage::hideEvent(QHideEvent *event)
 void SettingsPage::alertsRebuildList()
 {
     m_alertsList->clear();
-    for (const auto &rule : m_config.liveAlertRules) {
+    for (const auto &rule : m_config.liveAlertRules)
+    {
         auto *item = new QListWidgetItem(ruleDescription(rule), m_alertsList);
         item->setCheckState(rule.enabled ? Qt::Checked : Qt::Unchecked);
     }
@@ -1069,16 +1138,17 @@ void SettingsPage::alertsRebuildList()
 void SettingsPage::alertsAddRule()
 {
     LiveEventRule rule;
-    rule.id      = QString::number(QDateTime::currentMSecsSinceEpoch());
+    rule.id = QString::number(QDateTime::currentMSecsSinceEpoch());
     rule.enabled = true;
-    const auto &ep     = eventPresets().first();
-    rule.label         = ep.label;
-    rule.eventType     = ep.eventType;
-    rule.dataFilter    = ep.dataFilter;
-    rule.actionType    = actionPresets().first().actionType;
+    const auto &ep = eventPresets().first();
+    rule.label = ep.label;
+    rule.eventType = ep.eventType;
+    rule.dataFilter = ep.dataFilter;
+    rule.actionType = actionPresets().first().actionType;
     rule.actionParams["message"] = ep.hint;
 
-    if (alertsEditRuleDialog(rule)) {
+    if (alertsEditRuleDialog(rule))
+    {
         m_config.liveAlertRules.append(rule);
         alertsRebuildList();
         m_alertsList->setCurrentRow(m_config.liveAlertRules.size() - 1);
@@ -1090,10 +1160,12 @@ void SettingsPage::alertsAddRule()
 void SettingsPage::alertsEditRule()
 {
     const int row = m_alertsList->currentRow();
-    if (row < 0 || row >= m_config.liveAlertRules.size()) return;
+    if (row < 0 || row >= m_config.liveAlertRules.size())
+        return;
 
     LiveEventRule rule = m_config.liveAlertRules[row];
-    if (alertsEditRuleDialog(rule)) {
+    if (alertsEditRuleDialog(rule))
+    {
         rule.enabled = m_alertsList->item(row)->checkState() == Qt::Checked;
         m_config.liveAlertRules[row] = rule;
         alertsRebuildList();
@@ -1106,7 +1178,8 @@ void SettingsPage::alertsEditRule()
 void SettingsPage::alertsRemoveRule()
 {
     const int row = m_alertsList->currentRow();
-    if (row < 0 || row >= m_config.liveAlertRules.size()) return;
+    if (row < 0 || row >= m_config.liveAlertRules.size())
+        return;
     m_config.liveAlertRules.removeAt(row);
     alertsRebuildList();
     m_config.save();
@@ -1119,11 +1192,11 @@ bool SettingsPage::alertsEditRuleDialog(LiveEventRule &rule)
     dlg.setWindowTitle("Edit Alert Rule");
     dlg.setMinimumWidth(440);
 
-    auto *eventCombo  = new QComboBox(&dlg);
+    auto *eventCombo = new QComboBox(&dlg);
     auto *actionCombo = new QComboBox(&dlg);
-    auto *titleEdit   = new QLineEdit(rule.actionParams.value("title").toString(), &dlg);
-    auto *msgEdit     = new QLineEdit(rule.actionParams.value("message").toString(), &dlg);
-    auto *hintLabel   = new QLabel(&dlg);
+    auto *titleEdit = new QLineEdit(rule.actionParams.value("title").toString(), &dlg);
+    auto *msgEdit = new QLineEdit(rule.actionParams.value("message").toString(), &dlg);
+    auto *hintLabel = new QLabel(&dlg);
     hintLabel->setWordWrap(true);
 
     const auto &ePresets = eventPresets();
@@ -1135,23 +1208,26 @@ bool SettingsPage::alertsEditRuleDialog(LiveEventRule &rule)
         actionCombo->addItem(p.label);
     actionCombo->setCurrentIndex(findActionPresetIndex(rule));
 
-    const auto updateHint = [&](int idx) {
-        if (idx < 0 || idx >= ePresets.size()) return;
+    const auto updateHint = [&](int idx)
+    {
+        if (idx < 0 || idx >= ePresets.size())
+            return;
         const QString &hint = ePresets[idx].hint;
         hintLabel->setText(hint.isEmpty() ? QString()
                                           : QStringLiteral("Available: %1").arg(hint));
     };
     updateHint(eventCombo->currentIndex());
-    connect(eventCombo, &QComboBox::currentIndexChanged, &dlg, [&](int idx) { updateHint(idx); });
+    connect(eventCombo, &QComboBox::currentIndexChanged, &dlg, [&](int idx)
+            { updateHint(idx); });
 
     auto *bbox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     connect(bbox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
 
     auto *form = new QFormLayout;
-    form->addRow("When:",    eventCombo);
-    form->addRow("Do:",      actionCombo);
-    form->addRow("Title:",   titleEdit);
+    form->addRow("When:", eventCombo);
+    form->addRow("Do:", actionCombo);
+    form->addRow("Title:", titleEdit);
     form->addRow("Message:", msgEdit);
     form->addRow(hintLabel);
 
@@ -1164,25 +1240,27 @@ bool SettingsPage::alertsEditRuleDialog(LiveEventRule &rule)
 
     const int ei = eventCombo->currentIndex();
     const int ai = actionCombo->currentIndex();
-    if (ei >= 0 && ei < ePresets.size()) {
-        rule.label      = ePresets[ei].label;
-        rule.eventType  = ePresets[ei].eventType;
+    if (ei >= 0 && ei < ePresets.size())
+    {
+        rule.label = ePresets[ei].label;
+        rule.eventType = ePresets[ei].eventType;
         rule.dataFilter = ePresets[ei].dataFilter;
     }
     if (ai >= 0 && ai < actionPresets().size())
         rule.actionType = actionPresets()[ai].actionType;
 
-    rule.actionParams["title"]   = titleEdit->text();
+    rule.actionParams["title"] = titleEdit->text();
     rule.actionParams["message"] = msgEdit->text();
     return true;
 }
 
 QString SettingsPage::autoChromiumUA() const
 {
-    if (m_nativeChromiumUA.isEmpty()) {
-        const_cast<SettingsPage*>(this)->m_nativeChromiumUA = QWebEngineProfile::defaultProfile()->httpUserAgent();
+    if (m_nativeChromiumUA.isEmpty())
+    {
+        const_cast<SettingsPage *>(this)->m_nativeChromiumUA = QWebEngineProfile::defaultProfile()->httpUserAgent();
     }
-    
+
     if (m_nativeChromiumUA.isEmpty())
         return {};
     static const QRegularExpression kQtToken(QStringLiteral(R"(QtWebEngine/[\d.]+ )"));
@@ -1190,10 +1268,9 @@ QString SettingsPage::autoChromiumUA() const
     if (!m_config.debugUserAgentQt)
         ua.remove(kQtToken);
     ua = ua.trimmed();
-    if (m_config.debugLegacyUserAgentApp) {
-        const QString token = QCoreApplication::applicationName().remove(u' ')
-                              + u'/'
-                              + QCoreApplication::applicationVersion();
+    if (m_config.debugLegacyUserAgentApp)
+    {
+        const QString token = QCoreApplication::applicationName().remove(u' ') + u'/' + QCoreApplication::applicationVersion();
         ua += u' ' + token;
     }
     return ua;
@@ -1203,11 +1280,15 @@ void SettingsPage::refreshAutoUADisplay()
 {
     const QString ua = autoChromiumUA();
 
-    if (m_userAgent->currentText() == QLatin1String("Auto (Chromium)")) {
-        if (ua.isEmpty()) {
+    if (m_userAgent->currentText() == QLatin1String("Auto (Chromium)"))
+    {
+        if (ua.isEmpty())
+        {
             m_customUserAgent->setPlaceholderText("Native Chromium UA");
             m_customUserAgent->clear();
-        } else {
+        }
+        else
+        {
             m_customUserAgent->setPlaceholderText({});
             m_customUserAgent->setText(ua);
         }
@@ -1225,62 +1306,98 @@ void SettingsPage::updateAccountButton()
 
 void SettingsPage::saveAndEmit()
 {
-    if (m_autoDetect) m_config.autoDetectInstallDir = m_autoDetect->isChecked();
-    if (m_installDirs) m_config.installDirs = m_installDirs->items();
+    if (m_autoDetect)
+        m_config.autoDetectInstallDir = m_autoDetect->isChecked();
+    if (m_installDirs)
+        m_config.installDirs = m_installDirs->items();
 
-    if (m_exeNames) {
+    if (m_exeNames)
+    {
         const QStringList known = AppConfig::knownExes();
         QStringList userExes;
-        for (const QString &name : m_exeNames->items()) {
+        for (const QString &name : m_exeNames->items())
+        {
             if (!known.contains(name, Qt::CaseInsensitive))
                 userExes << name;
         }
         m_config.executableNames = userExes;
     }
-    
-    if (m_enableOverlay) m_config.useGameOverlay  = m_enableOverlay->isChecked();
-    if (m_overlayColumns) m_config.overlayColumns = m_overlayColumns->currentIndex();
-    if (m_overlayRows) m_config.overlayRows       = m_overlayRows->currentIndex();
-    if (m_overlayHideout) m_config.overlayShowHideout    = m_overlayHideout->isChecked();
-    if (m_overlayGuild) m_config.overlayShowGuild      = m_overlayGuild->isChecked();
-    if (m_overlayMenagerie) m_config.overlayShowMenagerie  = m_overlayMenagerie->isChecked();
-    if (m_overlayMonastery) m_config.overlayShowMonastery  = m_overlayMonastery->isChecked();
-    if (m_overlayHeist) m_config.overlayShowHeist      = m_overlayHeist->isChecked();
-    if (m_overlaySanctum) m_config.overlayShowSanctum    = m_overlaySanctum->isChecked();
-    if (m_overlayLadder) m_config.overlayShowLadder     = m_overlayLadder->isChecked();
-    if (m_overlayDelve) m_config.overlayShowDelve      = m_overlayDelve->isChecked();
-    if (m_overlayKingsmarch) m_config.overlayShowKingsmarch = m_overlayKingsmarch->isChecked();
-    if (m_overlayTimePlayed) m_config.overlayShowTimePlayed = m_overlayTimePlayed->isChecked();
-    if (m_overlayCharacterAge) m_config.overlayShowCharacterAge = m_overlayCharacterAge->isChecked();
-    if (m_overlayPassives) m_config.overlayShowPassives = m_overlayPassives->isChecked();
-    if (m_overlayDeaths) m_config.overlayShowDeaths = m_overlayDeaths->isChecked();
-    if (m_overlayMonstersRemaining) m_config.overlayShowMonstersRemaining = m_overlayMonstersRemaining->isChecked();
-    if (m_overlayAtlasPassives) m_config.overlayShowAtlasPassives = m_overlayAtlasPassives->isChecked();
-    if (m_overlayKills) m_config.overlayShowKills = m_overlayKills->isChecked();
-    if (m_overlayResetXP) m_config.overlayShowResetXP = m_overlayResetXP->isChecked();
-    if (m_overlayReloadItemFilter) m_config.overlayShowReloadItemFilter = m_overlayReloadItemFilter->isChecked();
-    if (m_overlayL2P) m_config.overlayShowL2P        = m_overlayL2P->isChecked();
-    
-    if (m_defaultTab) m_config.defaultTab      = m_defaultTab->currentIndex();
-    if (m_startMinimized) m_config.startMinimized  = m_startMinimized->isChecked();
-    if (m_minimizeToTray) m_config.minimizeToTray  = m_minimizeToTray->isChecked();
-    
-    if (m_showGuildTags) m_config.showGuildTags   = m_showGuildTags->isChecked();
-    
-    if (m_debugLog) m_config.debugLog       = m_debugLog->isChecked();
-    if (m_userAgent) {
+
+    if (m_enableOverlay)
+        m_config.useGameOverlay = m_enableOverlay->isChecked();
+    if (m_overlayColumns)
+        m_config.overlayColumns = m_overlayColumns->currentIndex();
+    if (m_overlayRows)
+        m_config.overlayRows = m_overlayRows->currentIndex();
+    if (m_overlayHideout)
+        m_config.overlayShowHideout = m_overlayHideout->isChecked();
+    if (m_overlayGuild)
+        m_config.overlayShowGuild = m_overlayGuild->isChecked();
+    if (m_overlayMenagerie)
+        m_config.overlayShowMenagerie = m_overlayMenagerie->isChecked();
+    if (m_overlayMonastery)
+        m_config.overlayShowMonastery = m_overlayMonastery->isChecked();
+    if (m_overlayHeist)
+        m_config.overlayShowHeist = m_overlayHeist->isChecked();
+    if (m_overlaySanctum)
+        m_config.overlayShowSanctum = m_overlaySanctum->isChecked();
+    if (m_overlayLadder)
+        m_config.overlayShowLadder = m_overlayLadder->isChecked();
+    if (m_overlayDelve)
+        m_config.overlayShowDelve = m_overlayDelve->isChecked();
+    if (m_overlayKingsmarch)
+        m_config.overlayShowKingsmarch = m_overlayKingsmarch->isChecked();
+    if (m_overlayTimePlayed)
+        m_config.overlayShowTimePlayed = m_overlayTimePlayed->isChecked();
+    if (m_overlayCharacterAge)
+        m_config.overlayShowCharacterAge = m_overlayCharacterAge->isChecked();
+    if (m_overlayPassives)
+        m_config.overlayShowPassives = m_overlayPassives->isChecked();
+    if (m_overlayDeaths)
+        m_config.overlayShowDeaths = m_overlayDeaths->isChecked();
+    if (m_overlayMonstersRemaining)
+        m_config.overlayShowMonstersRemaining = m_overlayMonstersRemaining->isChecked();
+    if (m_overlayAtlasPassives)
+        m_config.overlayShowAtlasPassives = m_overlayAtlasPassives->isChecked();
+    if (m_overlayKills)
+        m_config.overlayShowKills = m_overlayKills->isChecked();
+    if (m_overlayResetXP)
+        m_config.overlayShowResetXP = m_overlayResetXP->isChecked();
+    if (m_overlayReloadItemFilter)
+        m_config.overlayShowReloadItemFilter = m_overlayReloadItemFilter->isChecked();
+    if (m_overlayL2P)
+        m_config.overlayShowL2P = m_overlayL2P->isChecked();
+
+    if (m_defaultTab)
+        m_config.defaultTab = m_defaultTab->currentIndex();
+    if (m_startMinimized)
+        m_config.startMinimized = m_startMinimized->isChecked();
+    if (m_minimizeToTray)
+        m_config.minimizeToTray = m_minimizeToTray->isChecked();
+
+    if (m_showGuildTags)
+        m_config.showGuildTags = m_showGuildTags->isChecked();
+
+    if (m_debugLog)
+        m_config.debugLog = m_debugLog->isChecked();
+    if (m_userAgent)
+    {
         m_config.debugLegacyUserAgent = m_userAgent->currentText();
         if (m_userAgent->currentText() == QLatin1String("Custom") && m_customUserAgent)
             m_config.debugLegacyUserAgentCustom = m_customUserAgent->text();
-        if (m_userAgent->currentText() != QLatin1String("Custom")) {
-            if (m_includeToolName) m_config.debugLegacyUserAgentApp = m_includeToolName->isChecked();
-            if (m_includeQtToken) m_config.debugUserAgentQt = m_includeQtToken->isChecked();
+        if (m_userAgent->currentText() != QLatin1String("Custom"))
+        {
+            if (m_includeToolName)
+                m_config.debugLegacyUserAgentApp = m_includeToolName->isChecked();
+            if (m_includeQtToken)
+                m_config.debugUserAgentQt = m_includeQtToken->isChecked();
         }
     }
-    
+
     m_config.save();
 
-    if (m_userAgent) {
+    if (m_userAgent)
+    {
         if (m_userAgent->currentText() == QLatin1String("Auto (Chromium)"))
             refreshAutoUADisplay();
         else if (m_userAgent->currentText() != QLatin1String("Custom") && m_customUserAgent)

@@ -1,3 +1,5 @@
+<!-- docs/decisions/001-technology-stack.md (markdown) -->
+
 # ADR-001: Technology Stack Selection
 
 **Status**: Decided  
@@ -8,7 +10,7 @@
 
 ## Context
 
-This app is a desktop companion for Path of Exile 1 with two distinct runtime surfaces:
+This app is a desktop companion for Path of Exile with two distinct runtime surfaces:
 
 1. **Main app** — settings panel, activity log, system tray integration, game-process detection
 2. **Game overlay** — a transparent, always-on-top window that renders UI elements (text, inputs, buttons) over the game while the game remains playable underneath

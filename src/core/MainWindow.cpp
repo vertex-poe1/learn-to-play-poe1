@@ -1,3 +1,5 @@
+// src/core/MainWindow.cpp (C++)
+
 #include "core/MainWindow.h"
 #include "core/DeferredTaskQueue.h"
 #include "core/PaintProbeFilter.h"
@@ -41,8 +43,8 @@
 
 static QWidget *makePlaceholder(const QString &text, QWidget *parent)
 {
-    auto *w      = new QWidget(parent);
-    auto *lbl    = new QLabel(text, w);
+    auto *w = new QWidget(parent);
+    auto *lbl = new QLabel(text, w);
     auto *layout = new QVBoxLayout(w);
     lbl->setAlignment(Qt::AlignCenter);
     layout->addWidget(lbl);
@@ -54,20 +56,21 @@ MainWindow::MainWindow(QWidget *parent)
 {
     const bool timingMode = qgetenv("L2P_STARTUP_TIMING_MODE") == "1";
     m_timingMode = timingMode;
-    QElapsedTimer startupTimer; startupTimer.start();
+    QElapsedTimer startupTimer;
+    startupTimer.start();
     qDebug() << "[startup] begin";
 
-    setWindowTitle("Learn to Play: Path of Exile 1");
+    setWindowTitle("Learn to Play: Path of Exile");
     setWindowIcon(QIcon(":/icons/vertex-icon.png"));
     resize(720, 480);
 
-    m_taskManager    = new TaskManager(this);
+    m_taskManager = new TaskManager(this);
     m_serviceManager = new ServiceManager(this);
 
     m_sessionViewPage = new SessionViewPage(this);
     m_taskPanel = new TaskPanel(m_taskManager, this);
 
-    m_stack    = new QStackedWidget(this);
+    m_stack = new QStackedWidget(this);
     PerfProbe::instance().markDebug("mainwindow_before_logpage");
     m_logPage = new LogPage(this);
     PerfProbe::instance().markDebug("mainwindow_after_logpage");
@@ -77,31 +80,31 @@ MainWindow::MainWindow(QWidget *parent)
     PerfProbe::instance().markDebug("mainwindow_after_chatpage");
 
     PerfProbe::instance().markDebug("mainwindow_before_dmpage");
-    m_dmPage   = new DmPage(this);
+    m_dmPage = new DmPage(this);
     PerfProbe::instance().markDebug("mainwindow_after_dmpage");
 
     m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabGuide
-    m_stack->addWidget(m_chatPage);                          // TabChats
+    m_stack->addWidget(m_chatPage);                           // TabChats
     m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabStash
     m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabProfile
-    m_stack->addWidget(m_logPage);                          // TabLog
+    m_stack->addWidget(m_logPage);                            // TabLog
 
     PerfProbe::instance().markDebug("mainwindow_before_navbar");
     m_navBar = new NavBar({"Guide", "Chat", "Stash", "Profile", "Log"}, this);
     PerfProbe::instance().markDebug("mainwindow_after_navbar");
-    
+
     m_navBar->setCurrentIndex(TabGuide);
     m_stack->setCurrentIndex(TabGuide);
-    connect(m_navBar, &NavBar::currentChanged,  this, &MainWindow::onTabChanged);
-    connect(m_navBar, &NavBar::tabReselected,   this, [this](int index) {
+    connect(m_navBar, &NavBar::currentChanged, this, &MainWindow::onTabChanged);
+    connect(m_navBar, &NavBar::tabReselected, this, [this](int index)
+            {
         // In perf mode, clicking the current tab must not disrupt data loading
         // (e.g. dt=5 shows SessionViewPage on nav tab Log; reselecting Log would
         // otherwise switch the stack back to LogPage mid-load).
         if (PerfProbe::instance().enabled()) return;
-        m_stack->setCurrentIndex(index);
-    });
+        m_stack->setCurrentIndex(index); });
     connect(m_navBar, &NavBar::settingsClicked, this, &MainWindow::onGearClicked);
-    connect(m_navBar, &NavBar::searchClicked,   this, &MainWindow::onSearchClicked);
+    connect(m_navBar, &NavBar::searchClicked, this, &MainWindow::onSearchClicked);
 
     auto *container = new QWidget(this);
     auto *vbox = new QVBoxLayout(container);
@@ -124,23 +127,27 @@ MainWindow::MainWindow(QWidget *parent)
     PerfProbe::instance().markDebug("mainwindow_after_settingspage");
 
     m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabSearch
-    m_stack->addWidget(m_sessionViewPage);                     // TabCurrent
+    m_stack->addWidget(m_sessionViewPage);                    // TabCurrent
     m_stack->addWidget(m_dmPage);                             // TabDms
 
     PerfProbe::instance().markDebug("mainwindow_before_ruleengine");
     // Restore default tab. DMs and Current are sub-pages (not navbar tabs), so
     // navigate to the parent navbar tab first, then override the stack index.
-    const int navIdx[]   = { TabGuide, TabChats, TabChats, TabStash, TabProfile, TabLog,     TabLog };
-    const int stackIdx[] = { TabGuide, TabChats, TabDms,   TabStash, TabProfile, TabCurrent, TabLog };
+    const int navIdx[] = {TabGuide, TabChats, TabChats, TabStash, TabProfile, TabLog, TabLog};
+    const int stackIdx[] = {TabGuide, TabChats, TabDms, TabStash, TabProfile, TabCurrent, TabLog};
 
-    if (timingMode) {
+    if (timingMode)
+    {
         m_navBar->setCurrentIndex(TabLog);
         m_stack->setCurrentIndex(TabLog);
-    } else {
+    }
+    else
+    {
         int dt = qBound(0, m_config.defaultTab, 6);
 
         // Perf mode can override the default tab via env var set by main().
-        if (PerfProbe::instance().enabled()) {
+        if (PerfProbe::instance().enabled())
+        {
             const QByteArray dtEnv = qgetenv("L2P_PERF_DEFAULT_TAB");
             if (!dtEnv.isEmpty())
                 dt = qBound(0, dtEnv.toInt(), 6);
@@ -151,7 +158,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_stack->setCurrentIndex(stackIdx[dt]);
 
         // In perf mode: wire up dataLoaded signals and install PaintProbeFilters.
-        if (PerfProbe::instance().enabled()) {
+        if (PerfProbe::instance().enabled())
+        {
             auto &probe = PerfProbe::instance();
             QWidget *defaultPage = m_stack->widget(stackIdx[dt]);
             probe.setDefaultPageWidget(defaultPage);
@@ -164,7 +172,7 @@ MainWindow::MainWindow(QWidget *parent)
 
             // swapNavIdx maps directly to stack widget index for NavBar tabs 0-4.
             const int swapStack = probe.swapNavIdx(); // 0=Guide,1=Chats,2=Stash,3=Profile,4=Log
-            QWidget *swapPage   = m_stack->widget(swapStack);
+            QWidget *swapPage = m_stack->widget(swapStack);
 
             defaultPage->installEventFilter(
                 new PaintProbeFilter(PaintProbeFilter::Default, this));
@@ -182,62 +190,77 @@ MainWindow::MainWindow(QWidget *parent)
             // Connect the default page's dataLoaded signal.
             // For placeholder pages (Guide/Stash/Profile), PerfProbe auto-fires
             // first_load right after first_interaction (no async data fetch needed).
-            const bool isPlaceholder = (stackIdx[dt] == TabGuide
-                                        || stackIdx[dt] == TabStash
-                                        || stackIdx[dt] == TabProfile);
+            const bool isPlaceholder = (stackIdx[dt] == TabGuide || stackIdx[dt] == TabStash || stackIdx[dt] == TabProfile);
             probe.setIsPlaceholderPage(isPlaceholder);
 
-            if (stackIdx[dt] == TabLog) {
+            if (stackIdx[dt] == TabLog)
+            {
                 connect(m_logPage, &LogPage::dataLoaded,
-                        this, [&probe]() { probe.onDefaultPageLoaded(); });
-            } else if (stackIdx[dt] == TabChats) {
+                        this, [&probe]()
+                        { probe.onDefaultPageLoaded(); });
+            }
+            else if (stackIdx[dt] == TabChats)
+            {
                 connect(m_chatPage, &ChatPage::dataLoaded,
-                        this, [&probe]() { probe.onDefaultPageLoaded(); });
-            } else if (stackIdx[dt] == TabDms) {
+                        this, [&probe]()
+                        { probe.onDefaultPageLoaded(); });
+            }
+            else if (stackIdx[dt] == TabDms)
+            {
                 connect(m_dmPage, &DmPage::dataLoaded,
-                        this, [&probe]() { probe.onDefaultPageLoaded(); });
-            } else if (stackIdx[dt] == TabCurrent) {
+                        this, [&probe]()
+                        { probe.onDefaultPageLoaded(); });
+            }
+            else if (stackIdx[dt] == TabCurrent)
+            {
                 connect(m_sessionViewPage, &SessionViewPage::dataLoaded,
-                        this, [&probe]() { probe.onDefaultPageLoaded(); });
+                        this, [&probe]()
+                        { probe.onDefaultPageLoaded(); });
             }
         }
     }
 
     connect(m_logPage, &LogPage::viewSessionRequested,
-            this, [this](qint64 sessionId, const QString &startedAt) {
+            this, [this](qint64 sessionId, const QString &startedAt)
+            {
                 m_sessionViewPage->viewSession(sessionId, startedAt);
                 m_stack->setCurrentIndex(TabCurrent);
-                schedulePreloads(TabCurrent);
-            });
+                schedulePreloads(TabCurrent); });
     connect(m_sessionViewPage, &SessionViewPage::backRequested,
-            this, [this] {
+            this, [this]
+            {
                 m_stack->setCurrentIndex(TabLog);
-                schedulePreloads(TabLog);
-            });
+                schedulePreloads(TabLog); });
     connect(m_chatPage, &ChatPage::viewDmsRequested,
-            this, [this] {
+            this, [this]
+            {
                 m_stack->setCurrentIndex(TabDms);
-                schedulePreloads(TabDms);
-            });
+                schedulePreloads(TabDms); });
     connect(m_logPage, &LogPage::sessionPreviewRequested,
-            this, [this](qint64 sessionId, const QString &startedAt) {
-                m_sessionViewPage->preloadSession(sessionId, startedAt);
-            });
+            this, [this](qint64 sessionId, const QString &startedAt)
+            { m_sessionViewPage->preloadSession(sessionId, startedAt); });
 
     // Restore saved window geometry; if the saved screen no longer exists, keep
     // the saved size but let the OS decide placement.
     const WindowGeometry &wg = m_config.windowGeometry;
-    if (!wg.screen.isEmpty()) {
+    if (!wg.screen.isEmpty())
+    {
         bool screenFound = false;
-        for (QScreen *s : QApplication::screens()) {
-            if (s->name() == wg.screen) { screenFound = true; break; }
+        for (QScreen *s : QApplication::screens())
+        {
+            if (s->name() == wg.screen)
+            {
+                screenFound = true;
+                break;
+            }
         }
         resize(wg.width, wg.height);
         if (screenFound)
             move(wg.x, wg.y);
     }
 
-    connect(qApp, &QCoreApplication::aboutToQuit, this, [this, timingMode]() {
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this, timingMode]()
+            {
         if (timingMode) return;
         WindowGeometry &wg = m_config.windowGeometry;
         wg.x      = x();
@@ -246,17 +269,15 @@ MainWindow::MainWindow(QWidget *parent)
         wg.height = height();
         if (QScreen *s = screen())
             wg.screen = s->name();
-        m_config.save();
-    });
+        m_config.save(); });
 
     PerfProbe::instance().markDebug("mainwindow_before_gameoverlay");
 
     m_ruleEngine = new LiveEventRuleEngine(this);
     m_ruleEngine->setRules(m_config.liveAlertRules);
     connect(m_ruleEngine, &LiveEventRuleEngine::notifyRequested,
-            this, [this](const QString &title, const QString &tag, const QString &msg) {
-                log(title, tag, msg);
-            });
+            this, [this](const QString &title, const QString &tag, const QString &msg)
+            { log(title, tag, msg); });
 
     setupTray();
 
@@ -268,15 +289,18 @@ MainWindow::MainWindow(QWidget *parent)
     }
     statusBar()->addPermanentWidget(m_statusLabel);
 
-    connect(m_taskManager, &TaskManager::taskAdded,   this, &MainWindow::onTaskUpdated);
+    connect(m_taskManager, &TaskManager::taskAdded, this, &MainWindow::onTaskUpdated);
     connect(m_taskManager, &TaskManager::taskUpdated, this, &MainWindow::onTaskUpdated);
 
     QString dbPath;
     {
         const QByteArray override = qgetenv("L2P_STARTUP_TIMING_DB");
-        if (!override.isEmpty()) {
+        if (!override.isEmpty())
+        {
             dbPath = QString::fromUtf8(override);
-        } else {
+        }
+        else
+        {
             dbPath = AppConfig::configPath();
             dbPath.chop(5); // strip ".toml"
             dbPath += ".db";
@@ -291,21 +315,22 @@ MainWindow::MainWindow(QWidget *parent)
     // Database handle here.
     m_serviceManager->start(dbPath, installDir);
     m_poeInfoClient = new PoeInfoClient(m_serviceManager->host(), m_serviceManager->port(), this);
-    m_poeInfoClient->subscribe(QStringLiteral("clientlog"), [](QJsonObject payload) {
+    m_poeInfoClient->subscribe(QStringLiteral("clientlog"), [](QJsonObject payload)
+                               {
         LiveEvent ev;
         ev.type      = payload[QStringLiteral("type")].toString();
         ev.timestamp = payload[QStringLiteral("timestamp")].toString();
         ev.data      = payload[QStringLiteral("data")].toObject().toVariantMap();
-        LiveEventBus::instance()->dispatch(ev);
-    });
+        LiveEventBus::instance()->dispatch(ev); });
     connect(m_poeInfoClient, &PoeInfoClient::connected, this, &MainWindow::onServiceReady);
-    if (!m_timingMode) {
-        QTimer::singleShot(10'000, this, [this]() {
+    if (!m_timingMode)
+    {
+        QTimer::singleShot(10'000, this, [this]()
+                           {
             if (!m_poeInfoClient->isConnected()) {
                 log(QStringLiteral("poe-info-service unavailable"), QStringLiteral("service"),
                     QStringLiteral("Chat, DM, and session history will be unavailable until it connects."));
-            }
-        });
+            } });
     }
 
     m_tracker = WindowTracker::create();
@@ -313,7 +338,9 @@ MainWindow::MainWindow(QWidget *parent)
     PerfProbe::instance().markDebug("mainwindow_before_gameoverlay_new");
 
     m_overlay = nullptr;
-    if (!timingMode && !PerfProbe::instance().enabled()) QTimer::singleShot(0, this, [this]() {
+    if (!timingMode && !PerfProbe::instance().enabled())
+        QTimer::singleShot(0, this, [this]()
+                           {
         m_overlay = new GameOverlay(this);
         PerfProbe::instance().markDebug("mainwindow_after_gameoverlay");
         m_overlay->setLayoutGrid(m_config.overlayColumns, m_config.overlayRows);
@@ -341,8 +368,7 @@ MainWindow::MainWindow(QWidget *parent)
             showNormal();
             activateWindow();
             raise();
-        });
-    });
+        }); });
 
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(1000);
@@ -389,7 +415,8 @@ void MainWindow::showWindow()
 
 void MainWindow::ensureSettingsPage()
 {
-    if (m_settingsPage) return;
+    if (m_settingsPage)
+        return;
     m_settingsPage = new SettingsPage(m_config, this);
     connect(m_settingsPage, &SettingsPage::configChanged,
             this, &MainWindow::onConfigChanged);
@@ -416,13 +443,26 @@ void MainWindow::schedulePreloads(int stackIndex)
     // The new requestor is the page widget that corresponds to the active tab.
     // For tabs that don't enqueue into DeferredTaskQueue this is a no-op but
     // kept consistent so future preloads can use it.
-    switch (stackIndex) {
-    case TabSettings: m_lastPreloadRequestor = m_settingsPage;    break;
-    case TabLog:      m_lastPreloadRequestor = m_logPage;         break;
-    case TabCurrent:  m_lastPreloadRequestor = m_sessionViewPage; break;
-    case TabChats:    m_lastPreloadRequestor = m_chatPage;        break;
-    case TabDms:      m_lastPreloadRequestor = m_dmPage;          break;
-    default:          m_lastPreloadRequestor = nullptr;            break;
+    switch (stackIndex)
+    {
+    case TabSettings:
+        m_lastPreloadRequestor = m_settingsPage;
+        break;
+    case TabLog:
+        m_lastPreloadRequestor = m_logPage;
+        break;
+    case TabCurrent:
+        m_lastPreloadRequestor = m_sessionViewPage;
+        break;
+    case TabChats:
+        m_lastPreloadRequestor = m_chatPage;
+        break;
+    case TabDms:
+        m_lastPreloadRequestor = m_dmPage;
+        break;
+    default:
+        m_lastPreloadRequestor = nullptr;
+        break;
     }
 
     // All navbar data pages get a low-priority background fetch when not currently visible.
@@ -432,7 +472,8 @@ void MainWindow::schedulePreloads(int stackIndex)
     if (stackIndex != TabLog && stackIndex != TabCurrent)
         QTimer::singleShot(500, m_logPage, &LogPage::preload);
 
-    switch (stackIndex) {
+    switch (stackIndex)
+    {
     case TabChats:
         // Preload DMs (one click away via "View DMs" button)
         QTimer::singleShot(300, m_dmPage, &DmPage::preload);
@@ -452,12 +493,13 @@ void MainWindow::schedulePreloads(int stackIndex)
     case TabSettings:
         // Preload all settings sub-pages at low priority, tracked so they're
         // cancelled if the user navigates away before they execute.
-        if (m_settingsPage) {
-            QObject* req = m_settingsPage;
-            QTimer::singleShot(200, this, [this, req]() {
+        if (m_settingsPage)
+        {
+            QObject *req = m_settingsPage;
+            QTimer::singleShot(200, this, [this, req]()
+                               {
                 if (m_settingsPage)
-                    m_settingsPage->preloadSubPages(req);
-            });
+                    m_settingsPage->preloadSubPages(req); });
         }
         break;
     default:
@@ -483,10 +525,13 @@ void MainWindow::onGearClicked()
 
 void MainWindow::onSearchClicked()
 {
-    if (m_stack->currentIndex() == TabSearch) {
+    if (m_stack->currentIndex() == TabSearch)
+    {
         m_navBar->setSearchActive(false);
         m_stack->setCurrentIndex(m_navBar->currentIndex());
-    } else {
+    }
+    else
+    {
         showWindow();
         m_navBar->setSearchActive(true);
         m_stack->setCurrentIndex(TabSearch);
@@ -508,7 +553,8 @@ void MainWindow::onServiceReady()
 
     // Schedule initial preloads for the current page, and background-create
     // the settings page so its landing screen is instant on first click.
-    if (!m_timingMode && !perfMode) {
+    if (!m_timingMode && !perfMode)
+    {
         schedulePreloads(m_stack->currentIndex());
         QTimer::singleShot(800, this, &MainWindow::ensureSettingsPage);
     }
@@ -520,8 +566,9 @@ void MainWindow::onConfigChanged()
     m_chatPage->setShowGuildTags(m_config.showGuildTags);
     m_dmPage->setShowGuildTags(m_config.showGuildTags);
     m_ruleEngine->setRules(m_config.liveAlertRules);
-    
-    if (m_overlay) {
+
+    if (m_overlay)
+    {
         m_overlay->setLayoutGrid(m_config.overlayColumns, m_config.overlayRows);
         m_overlay->setHideoutVisible(m_config.overlayShowHideout);
         m_overlay->setGuildVisible(m_config.overlayShowGuild);
@@ -552,7 +599,8 @@ void MainWindow::onPollTimer()
     pollTimer.start();
 
     const QStringList exeNames = m_config.executableNames.isEmpty()
-        ? AppConfig::knownExes() : m_config.executableNames;
+                                     ? AppConfig::knownExes()
+                                     : m_config.executableNames;
 
     const QList<WindowState> states = m_tracker->poll(exeNames);
     const qint64 pollMs = pollTimer.elapsed();
@@ -565,8 +613,9 @@ void MainWindow::onPollTimer()
 
     const bool anyRunning = !states.isEmpty();
 
-    if (m_firstPoll || newPids != m_runningPids) {
-        m_firstPoll   = false;
+    if (m_firstPoll || newPids != m_runningPids)
+    {
+        m_firstPoll = false;
         m_runningPids = newPids;
         m_runningInstallDirs.clear();
         for (const auto &s : states)
@@ -578,21 +627,28 @@ void MainWindow::onPollTimer()
 
     // Overlay — track the first detected window's rect.
     const QRect firstRect = anyRunning ? states[0].rect : QRect{};
-    if (!firstRect.isNull()) {
+    if (!firstRect.isNull())
+    {
         m_lastGameRect = firstRect;
-    } else if (m_lastGameRect.isNull()) {
+    }
+    else if (m_lastGameRect.isNull())
+    {
         m_lastGameRect = QRect(0, 0, 1280, 720);
     }
-    if (m_overlay) {
+    if (m_overlay)
+    {
         m_overlay->updateGameRect(m_lastGameRect);
         m_overlay->setGameVisible(anyRunning && m_config.useGameOverlay);
         m_overlay->setGameHwnd(anyRunning ? states[0].hwnd : 0);
     }
 
     // Auto-detect install dirs for all running instances.
-    if (m_config.autoDetectInstallDir) {
-        for (const auto &s : states) {
-            if (!s.installDir.isEmpty() && !m_config.installDirs.contains(s.installDir)) {
+    if (m_config.autoDetectInstallDir)
+    {
+        for (const auto &s : states)
+        {
+            if (!s.installDir.isEmpty() && !m_config.installDirs.contains(s.installDir))
+            {
                 m_config.installDirs << s.installDir;
                 m_config.save();
                 log(QStringLiteral("Install directory auto-detected: %1").arg(s.installDir));
@@ -603,22 +659,25 @@ void MainWindow::onPollTimer()
     // Close sessions for installs where the game is no longer running.
     // poe-info-service owns ingestion and the sessions table; this just tells
     // it which installs are currently running.
-    if (m_poeInfoClient && m_poeInfoClient->isConnected() && !m_orphanCloseInFlight) {
+    if (m_poeInfoClient && m_poeInfoClient->isConnected() && !m_orphanCloseInFlight)
+    {
         m_orphanCloseInFlight = true;
         QJsonArray paths;
         for (const QString &dir : m_runningInstallDirs)
             paths.append(dir);
         m_poeInfoClient->request(QStringLiteral("sessions.closeOrphans"),
-            QJsonObject{{QStringLiteral("running_install_paths"), paths}},
-            [this](QJsonObject payload, QString error) {
-                m_orphanCloseInFlight = false;
-                if (!error.isEmpty())
-                    return;
-                if (payload[QStringLiteral("closed")].toInt() > 0) {
-                    m_logPage->markDirty();
-                    m_sessionViewPage->markDirty();
-                }
-            });
+                                 QJsonObject{{QStringLiteral("running_install_paths"), paths}},
+                                 [this](QJsonObject payload, QString error)
+                                 {
+                                     m_orphanCloseInFlight = false;
+                                     if (!error.isEmpty())
+                                         return;
+                                     if (payload[QStringLiteral("closed")].toInt() > 0)
+                                     {
+                                         m_logPage->markDirty();
+                                         m_sessionViewPage->markDirty();
+                                     }
+                                 });
     }
 }
 
@@ -630,10 +689,13 @@ void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    if (m_config.minimizeToTray && m_tray->isVisible()) {
+    if (m_config.minimizeToTray && m_tray->isVisible())
+    {
         hide();
         event->ignore();
-    } else {
+    }
+    else
+    {
         qApp->quit();
     }
 }
@@ -655,11 +717,13 @@ void MainWindow::onTaskUpdated(int id)
 
     int active = 0, totalPct = 0, running = 0;
     QString activeLabel;
-    for (const auto &r : all) {
+    for (const auto &r : all)
+    {
         if (r.status != TaskStatus::Pending && r.status != TaskStatus::Running)
             continue;
         ++active;
-        if (r.status == TaskStatus::Running) {
+        if (r.status == TaskStatus::Running)
+        {
             totalPct += r.percent;
             ++running;
             if (activeLabel.isEmpty())
@@ -667,24 +731,32 @@ void MainWindow::onTaskUpdated(int id)
         }
     }
 
-    if (active > 0) {
+    if (active > 0)
+    {
         const int pct = running > 0 ? totalPct / running : 0;
         const QString content = active == 1
-            ? QStringLiteral("%1% · %2").arg(pct).arg(activeLabel)
-            : QStringLiteral("%1 tasks · %2% · %3").arg(active).arg(pct).arg(activeLabel);
+                                    ? QStringLiteral("%1% · %2").arg(pct).arg(activeLabel)
+                                    : QStringLiteral("%1 tasks · %2% · %3").arg(active).arg(pct).arg(activeLabel);
         setStatusContent(content);
         return;
     }
 
     // All tasks done — show completion for the one that just finished.
-    for (const auto &r : all) {
-        if (r.id != id) continue;
+    for (const auto &r : all)
+    {
+        if (r.id != id)
+            continue;
         const QString t = QTime::currentTime().toString("HH:mm");
-        if (r.status == TaskStatus::Finished || r.status == TaskStatus::Monitoring) {
+        if (r.status == TaskStatus::Finished || r.status == TaskStatus::Monitoring)
+        {
             setStatusContent(QStringLiteral("%1 · %2").arg(t, r.name));
-        } else if (r.status == TaskStatus::Failed) {
+        }
+        else if (r.status == TaskStatus::Failed)
+        {
             setStatusContent(QStringLiteral("%1 · Failed").arg(t));
-        } else if (r.status == TaskStatus::Cancelled) {
+        }
+        else if (r.status == TaskStatus::Cancelled)
+        {
             setStatusContent(QStringLiteral("%1 · Cancelled").arg(t));
         }
         break;
@@ -699,9 +771,12 @@ void MainWindow::setStatusContent(const QString &content)
 
 void MainWindow::refreshStatusBar()
 {
-    if (m_lastStatusContent.isEmpty()) {
+    if (m_lastStatusContent.isEmpty())
+    {
         m_statusLabel->setText(!m_runningPids.isEmpty() ? "Waiting for new game info" : "Waiting for game launch");
-    } else {
+    }
+    else
+    {
         m_statusLabel->setText(m_lastStatusContent);
     }
 }

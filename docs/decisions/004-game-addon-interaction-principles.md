@@ -10,7 +10,7 @@
 
 ## Context
 
-This addon interacts with Path of Exile 1, a live game operated by Grinding Gear Games (GGG). GGG has published informal but widely-understood guidelines about what third-party tools may and may not do. The most commonly cited formulation is:
+This addon interacts with Path of Exile, a live game operated by Grinding Gear Games (GGG). GGG has published informal but widely-understood guidelines about what third-party tools may and may not do. The most commonly cited formulation is:
 
 > "One action outside the game should correspond to one action inside the game."
 

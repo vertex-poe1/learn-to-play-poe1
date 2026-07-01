@@ -1,11 +1,11 @@
 <!-- README.md (markdown) -->
 
-# Learn to Play: Path of Exile 1
+# Learn to Play: Path of Exile
 
 > [!NOTE]
 > This project is not affiliated with, endorsed by, or in any way associated with Grinding Gear Games or Path of Exile. Path of Exile is a trademark of Grinding Gear Games Ltd.
 
-A desktop companion for Path of Exile 1 that surfaces and guides the information the game already records — sessions, chat, events, whispers — in a clean, structured interface alongside your game. Nothing is read from game memory or sent to GGG's servers without a direct player action; the app is a passive observer of what the aPI and `Client.txt` already contains.
+A desktop companion for Path of Exile that surfaces and guides the information the game already records — sessions, chat, events, whispers — in a clean, structured interface alongside your game. Nothing is read from game memory or sent to GGG's servers without a direct player action; the app is a passive observer of what the aPI and `Client.txt` already contains.
 
 
 ---
