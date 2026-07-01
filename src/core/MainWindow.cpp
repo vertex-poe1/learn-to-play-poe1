@@ -83,11 +83,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_dmPage = new DmPage(this);
     PerfProbe::instance().markDebug("mainwindow_after_dmpage");
 
-    m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabGuide
-    m_stack->addWidget(m_chatPage);                           // TabChats
-    m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabStash
-    m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabProfile
-    m_stack->addWidget(m_logPage);                            // TabLog
+    m_stack->addWidget(makePlaceholder("Guide coming soon", this));   // TabGuide
+    m_stack->addWidget(m_chatPage);                                   // TabChats
+    m_stack->addWidget(makePlaceholder("Stash coming soon", this));   // TabStash
+    m_stack->addWidget(makePlaceholder("Profile coming soon", this)); // TabProfile
+    m_stack->addWidget(m_logPage);                                    // TabLog
 
     PerfProbe::instance().markDebug("mainwindow_before_navbar");
     m_navBar = new NavBar({"Guide", "Chat", "Stash", "Profile", "Log"}, this);
@@ -126,7 +126,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_stack->addWidget(makePlaceholder("Settings (Loading...)", this)); // TabSettings placeholder
     PerfProbe::instance().markDebug("mainwindow_after_settingspage");
 
-    m_stack->addWidget(makePlaceholder("Coming soon", this)); // TabSearch
+    m_stack->addWidget(makePlaceholder("Search coming soon", this)); // TabSearch
     m_stack->addWidget(m_sessionViewPage);                    // TabCurrent
     m_stack->addWidget(m_dmPage);                             // TabDms
 
