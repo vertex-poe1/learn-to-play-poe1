@@ -40,7 +40,7 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2022_64'
-          modules: 'qtpositioning qtwebchannel qtwebengine'
+          modules: 'qtpositioning qtwebchannel qtwebengine qtwebsockets'
           aqtsource: "git+https://github.com/miurahr/aqtinstall.git@bbfb1f7c0590b9eb3fa91356e75bb64fb15d3643"
           cache: true
           cache-key-prefix: 'qt-6.11.1-win64-unofficial'
