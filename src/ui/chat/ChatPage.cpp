@@ -1,6 +1,5 @@
 #include "ui/chat/ChatPage.h"
 #include "db/Database.h"
-#include "db/QueryService.h"
 #include "services/PoeInfoClient.h"
 #include "ui/widgets/ScrollJumpButton.h"
 #include "ui/Theme.h"
@@ -516,12 +515,6 @@ ChatPage::ChatPage(QWidget *parent)
     m_loadingOverlay->hide();
 }
 
-void ChatPage::setQueryService(QueryService *qs)
-{
-    m_queryService = qs;
-    triggerLoadIfNeeded();
-}
-
 void ChatPage::setPoeInfoClient(PoeInfoClient *client)
 {
     m_poeInfoClient = client;
@@ -805,16 +798,27 @@ void ChatPage::showError(const QString &msg)
 
 void ChatPage::openFilterPanel()
 {
-    if (!m_queryService) return;
+    if (!m_poeInfoClient || !m_poeInfoClient->isConnected()) return;
     const QSet<QChar> channels   = activeChannels();
     const bool        includeDms = m_cbDm->isChecked();
-    m_queryService->fetchChatDates(channels, includeDms, [this](QStringList dates) {
-        m_cachedDates = std::move(dates);
-        m_filterPath.clear();
-        refreshFilterPanel();
-        m_filterScroll->verticalScrollBar()->setValue(0);
-        m_view->setCurrentIndex(1);
-    });
+    QJsonArray chanArr;
+    for (QChar ch : channels) chanArr.append(QString(ch));
+    const QJsonObject params{
+        {QStringLiteral("channels"),    chanArr},
+        {QStringLiteral("include_dms"), includeDms},
+    };
+    m_poeInfoClient->request(QStringLiteral("chat.dates"), params,
+        [self = QPointer<ChatPage>(this)](QJsonObject payload, QString error) {
+            if (!self || !error.isEmpty()) return;
+            QStringList dates;
+            for (const QJsonValue &v : payload[QStringLiteral("dates")].toArray())
+                dates << v.toString();
+            self->m_cachedDates = std::move(dates);
+            self->m_filterPath.clear();
+            self->refreshFilterPanel();
+            self->m_filterScroll->verticalScrollBar()->setValue(0);
+            self->m_view->setCurrentIndex(1);
+        });
 }
 
 void ChatPage::refreshFilterPanel()

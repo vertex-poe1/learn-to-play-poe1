@@ -24,7 +24,6 @@ class LogPage;
 class QTimer;
 class Database;
 class GameOverlay;
-class QueryService;
 class LiveEventRuleEngine;
 class LogIngestWorker;
 class SettingsPage;
@@ -94,7 +93,6 @@ private:
     QFutureWatcher<Database*> m_dbWatcher;
     bool          m_timingMode{false};
     Database     *m_db{};
-    QueryService *m_queryService{};
     ServiceManager *m_serviceManager{};
     PoeInfoClient  *m_poeInfoClient{};
 

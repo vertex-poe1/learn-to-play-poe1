@@ -371,6 +371,12 @@ func (s *server) handleRequest(c *hub.Client, msg proto.Message) {
 	case "log.zones":
 		s.handleLogZones(c, msg)
 
+	case "chat.dates":
+		s.handleChatDates(c, msg)
+
+	case "dm.partners":
+		s.handleDmPartners(c, msg)
+
 	default:
 		s.send(c, proto.Message{
 			Type:  proto.TypeResponse,
@@ -511,6 +517,54 @@ func (s *server) handleLogZones(c *hub.Client, msg proto.Message) {
 		Type:    proto.TypeResponse,
 		ID:      msg.ID,
 		Payload: mustMarshal(map[string]any{"zones": zones}),
+	})
+}
+
+func (s *server) handleChatDates(c *hub.Client, msg proto.Message) {
+	if s.queryDB == nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "no db configured"})
+		return
+	}
+	var params struct {
+		Channels   []string `json:"channels"`
+		IncludeDMs bool     `json:"include_dms"`
+	}
+	if err := json.Unmarshal(msg.Payload, &params); err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "bad params: " + err.Error()})
+		return
+	}
+	dates, err := s.queryDB.FetchChatDates(params.Channels, params.IncludeDMs)
+	if err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: err.Error()})
+		return
+	}
+	if dates == nil {
+		dates = []string{}
+	}
+	s.send(c, proto.Message{
+		Type:    proto.TypeResponse,
+		ID:      msg.ID,
+		Payload: mustMarshal(map[string]any{"dates": dates}),
+	})
+}
+
+func (s *server) handleDmPartners(c *hub.Client, msg proto.Message) {
+	if s.queryDB == nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: "no db configured"})
+		return
+	}
+	partners, err := s.queryDB.FetchWhisperPartnersWithDates()
+	if err != nil {
+		s.send(c, proto.Message{Type: proto.TypeResponse, ID: msg.ID, Error: err.Error()})
+		return
+	}
+	if partners == nil {
+		partners = []query.PartnerRecord{}
+	}
+	s.send(c, proto.Message{
+		Type:    proto.TypeResponse,
+		ID:      msg.ID,
+		Payload: mustMarshal(map[string]any{"partners": partners}),
 	})
 }
 

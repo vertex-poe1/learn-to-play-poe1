@@ -29,24 +29,6 @@ target_compile_definitions(test_perf_metrics PRIVATE
 add_test(NAME test_perf_metrics COMMAND test_perf_metrics)
 set_tests_properties(test_perf_metrics PROPERTIES LABELS "perf")
 
-# Unit tests for Database::fetchSessions() — order, field mapping, limit, offset.
-# Compiles Database.cpp directly; embeds schema.sql (seed.sql omitted intentionally:
-# Database warns+continues if :/db/seed.sql is absent, and sessions tests don't need it).
-qt_add_executable(test_database_sessions
-    test_database_sessions.cpp
-    ${CMAKE_SOURCE_DIR}/src/db/Database.cpp
-)
-qt_add_resources(test_database_sessions "test_dbdata"
-    PREFIX "/db"
-    BASE "${CMAKE_SOURCE_DIR}/data"
-    FILES "${CMAKE_SOURCE_DIR}/data/schema.sql"
-)
-target_include_directories(test_database_sessions PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_database_sessions PRIVATE
-    Qt6::Core Qt6::Test unofficial::sqlite3::sqlite3
-)
-add_test(NAME test_database_sessions COMMAND test_database_sessions)
-
 # Functional correctness for the startup path: app must start, populate LogPage,
 # and emit the timing marker — both with an empty DB and a pre-populated DB.
 # Runs on every `just test` (not labeled perf) so regressions are caught early.

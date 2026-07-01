@@ -1,6 +1,5 @@
 #include "ui/chat/DmPage.h"
 #include "db/Database.h"
-#include "db/QueryService.h"
 #include "services/PoeInfoClient.h"
 #include "ui/widgets/ScrollJumpButton.h"
 #include "ui/Theme.h"
@@ -481,12 +480,6 @@ DmPage::DmPage(QWidget *parent)
     m_loadingOverlay->hide();
 }
 
-void DmPage::setQueryService(QueryService *qs)
-{
-    m_queryService = qs;
-    triggerLoadIfNeeded();
-}
-
 void DmPage::setPoeInfoClient(PoeInfoClient *client)
 {
     m_poeInfoClient = client;
@@ -581,14 +574,24 @@ void DmPage::onPlayerSelected(const QString &name)
 
 void DmPage::openFilterPanel()
 {
-    if (!m_queryService) return;
-    m_queryService->fetchWhisperPartnersWithDates(
-        [this](QList<Database::PartnerRecord> partners) {
-            m_cachedPartners = std::move(partners);
-            m_filterPath.clear();
-            refreshFilterPanel();
-            m_filterScroll->verticalScrollBar()->setValue(0);
-            m_view->setCurrentIndex(1);
+    if (!m_poeInfoClient || !m_poeInfoClient->isConnected()) return;
+    m_poeInfoClient->request(QStringLiteral("dm.partners"), {},
+        [self = QPointer<DmPage>(this)](QJsonObject payload, QString error) {
+            if (!self || !error.isEmpty()) return;
+            QList<Database::PartnerRecord> partners;
+            for (const QJsonValue &v : payload[QStringLiteral("partners")].toArray()) {
+                const QJsonObject obj = v.toObject();
+                Database::PartnerRecord p;
+                p.name = obj[QStringLiteral("name")].toString();
+                for (const QJsonValue &d : obj[QStringLiteral("dates")].toArray())
+                    p.dates << d.toString();
+                partners.append(p);
+            }
+            self->m_cachedPartners = std::move(partners);
+            self->m_filterPath.clear();
+            self->refreshFilterPanel();
+            self->m_filterScroll->verticalScrollBar()->setValue(0);
+            self->m_view->setCurrentIndex(1);
         });
 }
 

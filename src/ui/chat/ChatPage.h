@@ -9,7 +9,6 @@
 
 struct LiveEvent;
 class PoeInfoClient;
-class QueryService;
 class QCheckBox;
 class QLabel;
 class QPushButton;
@@ -25,7 +24,6 @@ class ChatPage : public QWidget
 public:
     explicit ChatPage(QWidget *parent = nullptr);
 
-    void setQueryService(QueryService *qs);
     void setPoeInfoClient(PoeInfoClient *client);
     void setShowGuildTags(bool show);
     void reload();
@@ -59,7 +57,6 @@ private:
     static constexpr int kPageStep     = 50;
     static constexpr int kMaxWindow    = 300;
 
-    QueryService  *m_queryService{};
     PoeInfoClient *m_poeInfoClient{};
     QScrollArea  *m_scroll{};
     QWidget      *m_content{};

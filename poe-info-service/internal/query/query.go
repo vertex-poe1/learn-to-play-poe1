@@ -241,6 +241,8 @@ func (d *DB) FetchSessions(limit, offset int) ([]SessionRecord, error) {
 	      ORDER BY s.started_at DESC`
 	if limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	} else if offset > 0 {
+		q += fmt.Sprintf(" LIMIT -1 OFFSET %d", offset)
 	}
 	rows, err := d.db.Query(q)
 	if err != nil {
@@ -502,6 +504,106 @@ func (d *DB) FetchSessionPageData(sessionID int64, sessionEventLimit, zoneLimit 
 	}
 
 	return data, nil
+}
+
+// FetchChatDates returns distinct dates ("YYYY-MM-DD") that have data for the
+// given channel/DM filter, most-recent first. Mirrors Database::fetchChatDates.
+func (d *DB) FetchChatDates(channels []string, includeDms bool) ([]string, error) {
+	if len(channels) == 0 && !includeDms {
+		return nil, nil
+	}
+	var parts []string
+	var args []any
+	if len(channels) > 0 {
+		ph := strings.Repeat("?,", len(channels))
+		ph = ph[:len(ph)-1]
+		parts = append(parts, fmt.Sprintf(
+			"SELECT occurred_at FROM chats WHERE channel IN (%s)", ph))
+		for _, ch := range channels {
+			args = append(args, ch)
+		}
+	}
+	if includeDms {
+		parts = append(parts, "SELECT occurred_at FROM whispers")
+	}
+	q := "SELECT DISTINCT date(occurred_at) FROM (" +
+		strings.Join(parts, " UNION ALL ") +
+		") ORDER BY 1 DESC"
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("fetchChatDates: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			return nil, err
+		}
+		out = append(out, date)
+	}
+	return out, rows.Err()
+}
+
+// PartnerRecord mirrors Database::PartnerRecord from the C++ side.
+type PartnerRecord struct {
+	Name  string   `json:"name"`
+	Dates []string `json:"dates"`
+}
+
+// FetchWhisperPartnersWithDates mirrors Database::fetchWhisperPartnersWithDates.
+// Returns partners ordered by most-recent activity, each with their distinct
+// active dates (YYYY-MM-DD), most-recent first.
+func (d *DB) FetchWhisperPartnersWithDates() ([]PartnerRecord, error) {
+	// Pass 1: partners in most-recently-active order.
+	orderRows, err := d.db.Query(
+		"SELECT player_name FROM whispers GROUP BY player_name ORDER BY MAX(occurred_at) DESC")
+	if err != nil {
+		return nil, fmt.Errorf("fetchWhisperPartnersWithDates (pass1): %w", err)
+	}
+	var ordered []string
+	for orderRows.Next() {
+		var name string
+		if err := orderRows.Scan(&name); err != nil {
+			orderRows.Close()
+			return nil, err
+		}
+		ordered = append(ordered, name)
+	}
+	orderRows.Close()
+	if err := orderRows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ordered) == 0 {
+		return nil, nil
+	}
+
+	// Pass 2: all distinct (player, date) pairs, most-recent date first per player.
+	dateRows, err := d.db.Query(
+		"SELECT DISTINCT player_name, date(occurred_at) FROM whispers" +
+			" ORDER BY player_name ASC, date(occurred_at) DESC")
+	if err != nil {
+		return nil, fmt.Errorf("fetchWhisperPartnersWithDates (pass2): %w", err)
+	}
+	dateMap := make(map[string][]string, len(ordered))
+	for dateRows.Next() {
+		var nm, dt string
+		if err := dateRows.Scan(&nm, &dt); err != nil {
+			dateRows.Close()
+			return nil, err
+		}
+		dateMap[nm] = append(dateMap[nm], dt)
+	}
+	dateRows.Close()
+	if err := dateRows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]PartnerRecord, 0, len(ordered))
+	for _, nm := range ordered {
+		result = append(result, PartnerRecord{Name: nm, Dates: dateMap[nm]})
+	}
+	return result, nil
 }
 
 func nextDay(dateStr string) string {

@@ -9,7 +9,6 @@
 #include "db/Database.h"
 #include "ui/chat/DmPage.h"
 #include "ui/log/LogPage.h"
-#include "db/QueryService.h"
 #include "ui/overlay/GameOverlay.h"
 #include "events/LiveEventBus.h"
 #include "events/LiveEventRuleEngine.h"
@@ -488,10 +487,7 @@ void MainWindow::onDatabaseReady()
         if (!m_timingMode && !perfMode) {
             scheduleLogIngestion();
         }
-        m_queryService = new QueryService(m_db->path(), this);
-        m_chatPage->setQueryService(m_queryService);
         m_chatPage->setShowGuildTags(m_config.showGuildTags);
-        m_dmPage->setQueryService(m_queryService);
         m_dmPage->setShowGuildTags(m_config.showGuildTags);
 
         const QString logPath = m_config.installDirs.isEmpty()

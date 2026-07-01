@@ -31,8 +31,6 @@ qt_add_executable(l2p-poe1
     db/DatabaseHealth.h
     db/DatabaseHealthWorker.cpp
     db/DatabaseHealthWorker.h
-    db/QueryService.cpp
-    db/QueryService.h
     events/LiveEvent.h
     events/LiveEventBus.cpp
     events/LiveEventBus.h
